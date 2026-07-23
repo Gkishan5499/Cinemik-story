@@ -1,0 +1,99 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #080808;
+  --color-ash: #f0ede8;
+  --color-crimson: #c8102e;
+  --color-gold: #ffd700;
+  --color-fog: #1a1a1f;
+  --color-muted: #4a4a52;
+  --color-border: rgba(240, 237, 232, 0.08);
+
+  --font-display: var(--font-display), "Zen Antique Soft", serif;
+  --font-hero: var(--font-hero), "Big Shoulders Display", sans-serif;
+  --font-body: var(--font-body), "Noto Serif JP", serif;
+  --font-mono: var(--font-mono), "Syne Mono", monospace;
+}
+
+:root {
+  --ink: #080808;
+  --ash: #f0ede8;
+  --crimson: #c8102e;
+  --gold: #ffd700;
+  --fog: #1a1a1f;
+  --muted: #4a4a52;
+  --border: rgba(240, 237, 232, 0.08);
+}
+
+body {
+  background: var(--ink);
+  color: var(--ash);
+  font-family: var(--font-body), serif;
+  overflow-x: hidden;
+  position: relative;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+  opacity: 0.08;
+  pointer-events: none;
+  z-index: 9997;
+  animation: grain-shift 0.5s steps(1) infinite;
+}
+
+.halftone-overlay {
+  background-image: radial-gradient(var(--border) 1px, transparent 1px);
+  background-size: 4px 4px;
+}
+
+@keyframes grain-shift {
+  0%   { transform: translate(0, 0); }
+  25%  { transform: translate(-3%, -4%); }
+  50%  { transform: translate(5%, 2%); }
+  75%  { transform: translate(-2%, 6%); }
+  100% { transform: translate(4%, -3%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before { animation: none; }
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* Custom Cursor Styles */
+.cursor-dot {
+  width: 4px; height: 4px;
+  background: var(--crimson);
+  border-radius: 50%;
+  position: fixed;
+  pointer-events: none;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+  transform: translate(-50%, -50%);
+}
+.cursor-ring {
+  width: 28px; height: 28px;
+  border: 1px solid var(--ash);
+  border-radius: 50%;
+  position: fixed;
+  pointer-events: none;
+  top: 0;
+  left: 0;
+  z-index: 9998;
+  transform: translate(-50%, -50%);
+}
+
+@keyframes scroll-drop {
+  0% { transform: translateY(-100%); opacity: 0; }
+  30% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { transform: translateY(400%); opacity: 0; }
+}
+
+.animate-scroll-drop {
+  animation: scroll-drop 1.5s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
