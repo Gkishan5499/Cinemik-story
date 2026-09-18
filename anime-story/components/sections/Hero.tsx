@@ -1,8 +1,7 @@
 'use client';
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
-import { splitTextToWords } from '@/lib/gsap-utils';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -10,167 +9,156 @@ export default function Hero() {
   const titleRef = useRef<HTMLHeadingElement>(null);
   const subtitleRef = useRef<HTMLParagraphElement>(null);
   const badgesRef = useRef<HTMLDivElement>(null);
-  const statsRef = useRef<HTMLDivElement>(null);
   const ctaRef = useRef<HTMLDivElement>(null);
+  const statsRef = useRef<HTMLDivElement>(null);
 
   useGSAP(() => {
-    if (!titleRef.current) return;
+    const tl = gsap.timeline({ delay: 0.2 });
 
-    // Save original text for strict mode cleanup
-    const originalText = titleRef.current.innerText;
-    
-    // Only split if not already split
-    if (!titleRef.current.querySelector('span')) {
-      const words = splitTextToWords(titleRef.current);
-      
-      const tl = gsap.timeline({ delay: 0.3 });
-
-      tl.from(words, {
-        y: 120,
-        opacity: 0,
-        stagger: 0.08,
-        duration: 1.2,
-        ease: 'power4.out',
-      })
-      .fromTo(subtitleRef.current, {
-        opacity: 0,
-        y: 20
-      }, {
-        opacity: 1,
-        y: 0,
-        duration: 1.5,
-        ease: 'power2.out'
-      }, '-=0.6')
-      .fromTo(badgesRef.current, {
-        opacity: 0,
-        y: 15
-      }, {
-        opacity: 1,
-        y: 0,
-        duration: 1,
-        ease: 'power2.out'
-      }, '-=1')
-      .fromTo(ctaRef.current, {
-        opacity: 0,
-        y: 20
-      }, {
-        opacity: 1,
-        y: 0,
-        duration: 1,
-        ease: 'power2.out'
-      }, '-=0.8')
-      .fromTo(statsRef.current, {
-        opacity: 0,
-      }, {
-        opacity: 1,
-        duration: 1.2,
-        ease: 'power2.out'
-      }, '-=0.6');
-      
-      return () => {
-        if (titleRef.current) {
-          titleRef.current.innerHTML = originalText;
-        }
-      };
-    }
+    tl.fromTo(
+      titleRef.current,
+      { opacity: 0, y: 40, scale: 0.95 },
+      { opacity: 1, y: 0, scale: 1, duration: 1.2, ease: 'power4.out' }
+    )
+      .fromTo(
+        subtitleRef.current,
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 1, ease: 'power2.out' },
+        '-=0.7'
+      )
+      .fromTo(
+        badgesRef.current,
+        { opacity: 0, y: 15 },
+        { opacity: 1, y: 0, duration: 0.8, ease: 'power2.out' },
+        '-=0.6'
+      )
+      .fromTo(
+        ctaRef.current,
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.9, ease: 'power2.out' },
+        '-=0.6'
+      )
+      .fromTo(
+        statsRef.current,
+        { opacity: 0 },
+        { opacity: 1, duration: 1, ease: 'power2.out' },
+        '-=0.4'
+      );
   });
 
   return (
-    <section id="story" className="relative w-full h-screen flex flex-col justify-center px-6 md:px-16 overflow-hidden">
-      {/* Background Image */}
+    <section id="hero" className="relative w-full min-h-screen flex flex-col justify-center px-6 md:px-16 pt-28 pb-16 overflow-hidden bg-[#0A0A0A]">
+      {/* Background Image & Gradient Overlays */}
       <div className="absolute inset-0 z-0">
-        <Image 
+        <Image
           src="/hero_bg.png"
-          alt="Atmospheric Background"
+          alt="CINEMIKS Background"
           fill
           sizes="100vw"
           priority
-          className="object-cover opacity-20"
+          className="object-cover opacity-25"
         />
-        {/* Multi-layer gradients for depth */}
-        <div className="absolute inset-0 bg-gradient-to-b from-ink/60 via-transparent to-ink z-10" />
-        <div className="absolute inset-0 bg-gradient-to-r from-ink/80 via-transparent to-ink/40 z-10" />
-        {/* Crimson glow accent */}
-        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[80vw] h-[40vh] bg-crimson/5 blur-[80px] z-10 rounded-full" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#0A0A0A]/90 via-[#0A0A0A]/60 to-[#0A0A0A] z-10" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0A0A0A] via-transparent to-[#0A0A0A]/80 z-10" />
+        {/* Glow Accents */}
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[70vw] h-[40vh] bg-[#2596be]/15 blur-[120px] z-10 rounded-full" />
+        <div className="absolute bottom-10 right-1/4 w-[40vw] h-[30vh] bg-[#FFC857]/10 blur-[100px] z-10 rounded-full" />
       </div>
 
-      {/* Red vertical accent line */}
-      <div className="absolute left-6 md:left-16 top-1/4 bottom-1/4 w-[2px] bg-gradient-to-b from-transparent via-crimson/80 to-transparent z-20" />
-      
-      {/* Content */}
-      <div className="relative z-20 w-full max-w-screen-2xl mx-auto flex flex-col items-center text-center justify-center mt-16 md:mt-24">
+      {/* Cinematic Accent Bar */}
+      <div className="absolute left-6 md:left-12 top-1/4 bottom-1/4 w-[2px] bg-gradient-to-b from-transparent via-[#2596be] to-transparent z-20 hidden sm:block" />
 
-        {/* Badges row */}
-        <div ref={badgesRef} className="flex items-center gap-4 mb-8 opacity-0 flex-wrap justify-center">
-          <span className="font-mono text-[10px] tracking-[0.3em] text-crimson uppercase border border-crimson/40 px-3 py-1.5 bg-crimson/5 backdrop-blur-sm">
-            SEASON III
-          </span>
-          <span className="w-1 h-1 rounded-full bg-ash/40" />
-          <span className="font-mono text-[10px] tracking-[0.3em] text-ash/60 uppercase">
-            NOW STREAMING
-          </span>
-          <span className="w-1 h-1 rounded-full bg-ash/40" />
-          <span className="font-mono text-[10px] tracking-[0.3em] text-ash/60 uppercase">
-            EP. 39 FINALE
+      {/* Hero Content Container */}
+      <div className="relative z-20 w-full max-w-7xl mx-auto flex flex-col items-center text-center justify-center">
+
+        {/* Brand Tagline Badge */}
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#2596be]/30 bg-[#2596be]/10 backdrop-blur-md mb-6">
+          <span className="w-2 h-2 rounded-full bg-[#2596be] animate-pulse" />
+          <span className="font-manrope text-xs font-bold tracking-[0.25em] text-[#FFC857] uppercase">
+            POWERED BY IMMERSIVE READING
           </span>
         </div>
 
-        {/* Main Title */}
-        <h1 
+        {/* Main Title - READ THE REEL */}
+        <h1
           ref={titleRef}
-          className="font-hero text-[18vw] md:text-[15vw] leading-[0.75] tracking-tight uppercase text-ash select-none drop-shadow-[0_0_60px_rgba(200,16,46,0.4)]"
+          className="font-bricolage text-6xl sm:text-7xl md:text-8xl lg:text-[9.5rem] font-extrabold tracking-tight uppercase text-white leading-none drop-shadow-[0_0_60px_rgba(37, 150, 190,0.35)]"
         >
-          THE WORLD AWAKENS
+          READ THE <span className="text-gradient-01">REEL</span>
         </h1>
-        
-        {/* Subtitle */}
-        <p 
+
+        {/* Subheading */}
+        <p
           ref={subtitleRef}
-          className="font-body text-ash/80 text-lg md:text-2xl max-w-2xl mt-10 md:mt-14 opacity-0 tracking-wide font-light drop-shadow-lg leading-relaxed"
+          className="font-manrope text-white/80 text-base sm:text-lg md:text-2xl max-w-3xl mt-6 md:mt-8 tracking-wide font-medium leading-relaxed"
         >
-          In the age before memory, the first blade was drawn — and the crimson lotus bloomed from the blood of forgotten gods.
+          Experience a new generation of storytelling where motion, cinematic visuals, immersive audio, and imagination come together to create unforgettable entertainment experiences.
         </p>
 
-        {/* CTA Buttons */}
-        <div ref={ctaRef} className="flex flex-col sm:flex-row gap-4 mt-10 opacity-0">
-          <Link 
-            href="/episodes/39"
-            className="group font-mono text-xs tracking-[0.25em] uppercase px-8 py-4 bg-crimson hover:bg-crimson/90 text-white transition-all duration-300 relative overflow-hidden"
-            data-cursor-hover
-          >
-            <span className="relative z-10">WATCH LATEST EPISODE</span>
-            <div className="absolute inset-0 bg-white/10 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-500 skew-x-[-12deg]" />
-          </Link>
-          <Link 
-            href="/story"
-            className="font-mono text-xs tracking-[0.25em] uppercase px-8 py-4 border border-ash/30 text-ash/80 hover:text-white hover:border-ash/60 transition-all duration-300 backdrop-blur-sm"
-            data-cursor-hover
-          >
-            EXPLORE THE STORY
-          </Link>
-        </div>
-
-        {/* Stats row */}
-        <div ref={statsRef} className="flex items-center gap-8 md:gap-16 mt-16 opacity-0">
+        {/* Supporting Points Badges */}
+        <div ref={badgesRef} className="flex flex-wrap items-center justify-center gap-3 sm:gap-6 mt-8">
           {[
-            { value: '39', label: 'Episodes' },
-            { value: '3', label: 'Seasons' },
-            { value: '12M+', label: 'Viewers' },
-            { value: '96', label: 'Score' },
-          ].map((stat, i) => (
-            <div key={i} className="text-center">
-              <div className="font-hero text-3xl md:text-5xl text-ash leading-none">{stat.value}</div>
-              <div className="font-mono text-[10px] tracking-widest text-ash/40 mt-1 uppercase">{stat.label}</div>
+            'Experience immersive stories.',
+            'Build passionate communities.',
+            'Create the next generation of entertainment.',
+          ].map((point, index) => (
+            <div
+              key={index}
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/[0.04] border border-white/10 backdrop-blur-md font-manrope text-xs font-semibold text-[#F5F5F7]"
+            >
+              <span className="text-[#FFC857]">✦</span>
+              <span>{point}</span>
             </div>
           ))}
         </div>
+
+        {/* CTA Buttons */}
+        <div ref={ctaRef} className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 mt-10 w-full sm:w-auto">
+          <Link
+            href="/story"
+            className="w-full sm:w-auto font-manrope text-sm font-bold tracking-wider uppercase px-9 py-4 bg-gradient-to-r from-[#2596be] to-[#E63946] hover:from-[#FFC857] hover:to-[#2596be] text-white rounded-sm transition-all duration-300 shadow-xl shadow-[#2596be]/25 hover:scale-[1.02] flex items-center justify-center gap-2"
+            data-cursor-hover
+          >
+            <span>Explore CINEMIKS</span>
+            <span className="text-lg">→</span>
+          </Link>
+          <Link
+            href="/creator-setup"
+            className="w-full sm:w-auto font-manrope text-sm font-semibold tracking-wider uppercase px-8 py-4 border border-[#FFC857]/40 hover:border-[#FFC857] text-[#FFC857] hover:bg-[#FFC857]/10 rounded-sm transition-all duration-300 backdrop-blur-md flex items-center justify-center gap-2"
+            data-cursor-hover
+          >
+            <span>Become a Creator</span>
+          </Link>
+        </div>
+
+        {/* Platform Stats Row */}
+        <div ref={statsRef} className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-12 mt-16 pt-10 border-t border-white/10 w-full max-w-4xl">
+          {[
+            { value: '12M+', label: 'Passionate Readers' },
+            { value: '500+', label: 'Original Creators' },
+            { value: '2.5K+', label: 'Immersive Episodes' },
+            { value: '98%', label: 'Entertainment Rating' },
+          ].map((stat, i) => (
+            <div key={i} className="text-center">
+              <div className="font-bricolage text-3xl sm:text-4xl md:text-5xl font-extrabold text-[#2596be] leading-none">
+                {stat.value}
+              </div>
+              <div className="font-manrope text-xs font-semibold tracking-wider text-white/50 mt-2 uppercase">
+                {stat.label}
+              </div>
+            </div>
+          ))}
+        </div>
+
       </div>
 
-      {/* Scroll Indicator */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 z-20">
-        <span className="font-mono text-[9px] tracking-[0.4em] text-ash/30 uppercase">Scroll</span>
-        <div className="w-[1px] h-14 bg-border relative overflow-hidden">
-          <div className="w-[1px] h-4 bg-crimson absolute top-0 animate-scroll-drop"></div>
+      {/* Scroll Down Indicator */}
+      <div className="mt-12 flex flex-col items-center gap-2 z-20">
+        <span className="font-manrope text-[10px] font-bold tracking-[0.3em] text-white/40 uppercase">
+          SCROLL TO EXPLORE
+        </span>
+        <div className="w-[2px] h-12 bg-white/10 relative overflow-hidden">
+          <div className="w-full h-4 bg-gradient-to-b from-[#2596be] to-[#FFC857] absolute top-0 animate-scroll-drop rounded-full" />
         </div>
       </div>
     </section>

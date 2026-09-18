@@ -1,34 +1,45 @@
 @import "tailwindcss";
 
 @theme {
-  --color-ink: #080808;
-  --color-ash: #f0ede8;
-  --color-crimson: #c8102e;
-  --color-gold: #ffd700;
-  --color-fog: #1a1a1f;
-  --color-muted: #4a4a52;
-  --color-border: rgba(240, 237, 232, 0.08);
+  --color-ink: #0A0A0A;
+  --color-ash: #F5F5F7;
+  --color-crimson: #E63946;
+  --color-orange: #2596be;
+  --color-brand: #2596be;
+  --color-gold: #FFC857;
+  --color-fog: #121216;
+  --color-muted: #6E6E73;
+  --color-border: rgba(255, 255, 255, 0.1);
 
-  --font-display: var(--font-display), "Zen Antique Soft", serif;
-  --font-hero: var(--font-hero), "Big Shoulders Display", sans-serif;
-  --font-body: var(--font-body), "Noto Serif JP", serif;
-  --font-mono: var(--font-mono), "Syne Mono", monospace;
+  --font-bricolage: var(--font-bricolage), "Bricolage Grotesque", sans-serif;
+  --font-manrope: var(--font-manrope), "Manrope", sans-serif;
+
+  /* Aliases for compatibility */
+  --font-display: var(--font-bricolage), "Bricolage Grotesque", sans-serif;
+  --font-hero: var(--font-bricolage), "Bricolage Grotesque", sans-serif;
+  --font-body: var(--font-manrope), "Manrope", sans-serif;
+  --font-mono: var(--font-manrope), "Manrope", monospace;
 }
 
 :root {
-  --ink: #080808;
-  --ash: #f0ede8;
-  --crimson: #c8102e;
-  --gold: #ffd700;
-  --fog: #1a1a1f;
-  --muted: #4a4a52;
-  --border: rgba(240, 237, 232, 0.08);
+  --ink: #0A0A0A;
+  --ash: #F5F5F7;
+  --orange: #2596be;
+  --gold: #FFC857;
+  --crimson: #E63946;
+  --fog: #121216;
+  --muted: #6E6E73;
+  --border: rgba(255, 255, 255, 0.1);
+
+  --gradient-01: linear-gradient(135deg, #2596be 0%, #38bdf8 100%);
+  --gradient-02: linear-gradient(135deg, #2596be 0%, #FFC857 100%);
+  --gradient-03: linear-gradient(135deg, #2596be 0%, #0A0A0A 100%);
 }
 
 body {
   background: var(--ink);
   color: var(--ash);
-  font-family: var(--font-body), serif;
+  font-family: var(--font-manrope), "Manrope", sans-serif;
   overflow-x: hidden;
   position: relative;
 }
@@ -39,7 +50,7 @@ body::before {
   inset: 0;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
   background-size: 200px 200px;
-  opacity: 0.08;
+  opacity: 0.05;
   pointer-events: none;
   z-index: 9997;
   animation: grain-shift 0.5s steps(1) infinite;
@@ -48,6 +59,30 @@ body::before {
 .halftone-overlay {
   background-image: radial-gradient(var(--border) 1px, transparent 1px);
   background-size: 4px 4px;
+}
+
+.bg-gradient-01 {
+  background: var(--gradient-01);
+}
+
+.bg-gradient-02 {
+  background: var(--gradient-02);
+}
+
+.bg-gradient-03 {
+  background: var(--gradient-03);
+}
+
+.text-gradient-01 {
+  background: var(--gradient-01);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-02 {
+  background: var(--gradient-02);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 @keyframes grain-shift {
@@ -65,8 +100,8 @@ body::before {
 
 /* Custom Cursor Styles */
 .cursor-dot {
-  width: 4px; height: 4px;
-  background: var(--crimson);
+  width: 6px; height: 6px;
+  background: #2596be;
   border-radius: 50%;
   position: fixed;
   pointer-events: none;
@@ -74,10 +109,11 @@ body::before {
   left: 0;
   z-index: 9999;
   transform: translate(-50%, -50%);
+  box-shadow: 0 0 10px rgba(37, 150, 190, 0.8);
 }
 .cursor-ring {
-  width: 28px; height: 28px;
-  border: 1px solid var(--ash);
+  width: 32px; height: 32px;
+  border: 1.5px solid rgba(37, 150, 190, 0.6);
   border-radius: 50%;
   position: fixed;
   pointer-events: none;
@@ -85,6 +121,7 @@ body::before {
   left: 0;
   z-index: 9998;
   transform: translate(-50%, -50%);
+  transition: width 0.2s, height 0.2s, border-color 0.2s;
 }
 
 @keyframes scroll-drop {

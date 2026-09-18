@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
+import { formatDate } from '@/lib/date';
 import { useRouter } from 'next/navigation';
 import { adminUsersAPI, storiesAPI, commentsAPI } from '@/lib/api';
 
@@ -341,7 +342,7 @@ export default function AdminDashboard() {
                             {u.isActive === false ? 'inactive' : 'active'}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-xs text-ash/60">{new Date(u.createdAt).toLocaleDateString()}</td>
+                        <td className="px-4 py-3 text-xs text-ash/60">{formatDate(u.createdAt)}</td>
                         <td className="px-4 py-3 text-right space-x-2">
                           <button
                             onClick={() => handleEditUser(u)}
@@ -414,7 +415,7 @@ export default function AdminDashboard() {
                       </div>
                       <div>
                         <p className="text-ash/60 uppercase">Created</p>
-                        <p className="text-ash text-sm">{new Date(story.createdAt).toLocaleDateString()}</p>
+                        <p className="text-ash text-sm">{formatDate(story.createdAt)}</p>
                       </div>
                     </div>
                   </div>

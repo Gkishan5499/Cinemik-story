@@ -56,6 +56,7 @@ router.post(
 	upload.fields([
 		{ name: "coverImage", maxCount: 1 },
 		{ name: "backgroundMusic", maxCount: 1 },
+		{ name: "video", maxCount: 1 },
 		{ name: "characterImages", maxCount: 12 },
 		{ name: "scenicImages", maxCount: 12 },
 	]),
@@ -68,6 +69,7 @@ router.put(
 	upload.fields([
 		{ name: "coverImage", maxCount: 1 },
 		{ name: "backgroundMusic", maxCount: 1 },
+		{ name: "video", maxCount: 1 },
 		{ name: "characterImages", maxCount: 12 },
 		{ name: "scenicImages", maxCount: 12 },
 	]),
@@ -89,14 +91,20 @@ router.post(
 	"/:storyId/episodes",
 	authenticate,
 	requireCreator,
-	upload.array("images", 10),
+	upload.fields([
+		{ name: "images", maxCount: 10 },
+		{ name: "video", maxCount: 20 },
+	]),
 	createEpisode
 );
 router.put(
 	"/:storyId/episodes/:episodeId",
 	authenticate,
 	requireCreator,
-	upload.array("images", 10),
+	upload.fields([
+		{ name: "images", maxCount: 10 },
+		{ name: "video", maxCount: 20 },
+	]),
 	updateEpisode
 );
 router.delete(

@@ -3,6 +3,8 @@ import mongoose, { Document, Schema } from "mongoose";
 export interface IStory extends Document {
   title: string;
   description: string;
+  contentType: "text" | "video";
+  videoUrl: string;
   coverImage: string;
   backgroundMusic: string;
   characterImages: string[];
@@ -30,6 +32,15 @@ const StorySchema = new Schema<IStory>(
       type: String,
       required: [true, "Description is required"],
       maxlength: 2000,
+    },
+    contentType: {
+      type: String,
+      enum: ["text", "video"],
+      default: "text",
+    },
+    videoUrl: {
+      type: String,
+      default: "",
     },
     coverImage: {
       type: String,

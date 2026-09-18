@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { episodesAPI, storiesAPI } from '@/lib/api';
+import { formatDate } from '@/lib/date';
 
 interface StoryItem {
   _id: string;
@@ -15,6 +16,8 @@ interface EpisodeItem {
   _id: string;
   title: string;
   content: string;
+  contentType?: 'text' | 'video';
+  videoUrl?: string;
   episodeNumber: number;
   images?: string[];
   createdAt: string;
@@ -108,6 +111,7 @@ export default function EpisodesPage() {
             <div className='flex flex-col divide-y divide-border/15'>
               {episodes.map((ep) => {
                 const previewImage = ep.images?.[0] || ep.storyCover || '';
+                const isVideo = ep.contentType === 'video' || Boolean(ep.videoUrl);
 
                 return (
                   <Link
@@ -127,6 +131,11 @@ export default function EpisodesPage() {
                           NO IMAGE
                         </div>
                       )}
+                      {isVideo && (
+                        <div className='absolute inset-0 bg-black/40 flex items-center justify-center'>
+                          <span className='text-xl'>🎬</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className='flex-1 min-w-0'>
@@ -138,6 +147,14 @@ export default function EpisodesPage() {
                         <span className='font-mono text-[9px] tracking-widest text-ash/30 uppercase'>
                           Episode {ep.episodeNumber}
                         </span>
+                        {isVideo && (
+                          <>
+                            <span className='font-mono text-[9px] tracking-widest text-ash/20'>·</span>
+                            <span className='px-1.5 py-0.5 text-[9px] font-mono tracking-widest text-crimson bg-crimson/20 border border-crimson/40 rounded uppercase'>
+                              🎬 MOTION COMIC {(ep as any).videoSections && (ep as any).videoSections.length > 1 ? `(${(ep as any).videoSections.length} PARTS)` : ''}
+                            </span>
+                          </>
+                        )}
                         {ep.creatorName && (
                           <>
                             <span className='font-mono text-[9px] tracking-widest text-ash/20'>·</span>
@@ -158,10 +175,10 @@ export default function EpisodesPage() {
 
                     <div className='hidden md:flex flex-col items-end gap-2 shrink-0'>
                       <span className='font-mono text-[9px] tracking-[0.2em] text-ash/25 uppercase'>
-                        {new Date(ep.createdAt).toLocaleDateString()}
+                        {formatDate(ep.createdAt)}
                       </span>
                       <div className='flex items-center gap-2 font-mono text-[10px] tracking-[0.2em] text-crimson opacity-0 group-hover:opacity-100 transition-all duration-300'>
-                        READ
+                        {isVideo ? 'WATCH' : 'READ'}
                         <svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2'>
                           <path d='M5 12h14M12 5l7 7-7 7' />
                         </svg>

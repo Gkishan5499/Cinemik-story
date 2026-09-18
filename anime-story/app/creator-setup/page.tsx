@@ -20,13 +20,15 @@ export default function CreatorSetup() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Redirect if not authenticated or not a reader
+  // Redirect if not authenticated, or if user is ALREADY a creator / admin
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
       router.replace('/auth/login');
-    } else if (user.role !== 'reader' && user.role !== 'creator') {
-      router.replace('/');
+    } else if (user.role === 'creator') {
+      router.replace('/dashboard');
+    } else if (user.role === 'admin') {
+      router.replace('/admin');
     }
   }, [authLoading, user, router]);
 
@@ -84,67 +86,70 @@ export default function CreatorSetup() {
     }
   };
 
-  if (authLoading || !user) {
-    return <main className="min-h-screen bg-ink" />;
+  if (authLoading || !user || user.role === 'creator' || user.role === 'admin') {
+    return <main className="min-h-screen bg-[#0A0A0A]" />;
   }
 
   return (
-    <main className="min-h-screen bg-ink pt-28 pb-20">
+    <main className="min-h-screen bg-[#0A0A0A] text-[#F5F5F7] pt-28 pb-20 font-manrope">
       <div className="max-w-2xl mx-auto px-6">
         {/* Header */}
         <div className="mb-12 text-center">
-          <h1 className="font-display text-4xl md:text-5xl tracking-[0.15em] text-ash mb-4">
+          <span className="font-manrope text-xs font-bold tracking-[0.3em] text-[#2596be] uppercase">
+            BECOME A CINEMIKS CREATOR
+          </span>
+          <h1 className="font-bricolage text-4xl md:text-5xl font-extrabold uppercase tracking-tight text-white mt-2">
             CREATOR PROFILE
           </h1>
-          <p className="font-mono text-sm tracking-widest text-ash/60">
-            Complete your creator profile to get started
+          <p className="font-manrope text-sm font-medium text-white/60 mt-2">
+            Complete your creator profile to launch your story studio
           </p>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <form onSubmit={handleSubmit} className="space-y-8 bg-[#121216] border border-white/10 p-8 rounded-sm shadow-2xl">
           {/* Error Message */}
           {error && (
-            <div className="bg-red-500/10 border border-red-500/50 rounded px-4 py-3">
-              <p className="text-red-400 font-mono text-sm">{error}</p>
+            <div className="bg-[#E63946]/10 border border-[#E63946]/50 rounded px-4 py-3">
+              <p className="text-[#E63946] font-manrope text-sm font-semibold">{error}</p>
             </div>
           )}
 
-          {/* Read-Only Fields */}
+          {/* Read-Only Account Info */}
           <div className="space-y-4">
-            <h2 className="font-mono text-xs uppercase tracking-widest text-ash/70">Account Info</h2>
+            <h2 className="font-manrope text-xs font-bold uppercase tracking-widest text-[#FFC857]">ACCOUNT INFO</h2>
             
             <div>
-              <label className="block font-mono text-[10px] tracking-[0.2em] uppercase text-ash/60 mb-2">
+              <label className="block font-manrope text-[11px] font-semibold tracking-wider uppercase text-white/60 mb-2">
                 Name
               </label>
               <input
                 type="text"
                 value={user.username || ''}
                 disabled
-                className="w-full bg-ash/5 border border-crimson/30 rounded px-4 py-3 font-mono text-sm text-ash/60 cursor-not-allowed"
+                className="w-full bg-[#0A0A0A] border border-white/10 rounded px-4 py-3 font-manrope text-sm text-white/60 cursor-not-allowed"
               />
             </div>
 
             <div>
-              <label className="block font-mono text-[10px] tracking-[0.2em] uppercase text-ash/60 mb-2">
+              <label className="block font-manrope text-[11px] font-semibold tracking-wider uppercase text-white/60 mb-2">
                 Email
               </label>
               <input
                 type="email"
                 value={user.email || ''}
                 disabled
-                className="w-full bg-ash/5 border border-crimson/30 rounded px-4 py-3 font-mono text-sm text-ash/60 cursor-not-allowed"
+                className="w-full bg-[#0A0A0A] border border-white/10 rounded px-4 py-3 font-manrope text-sm text-white/60 cursor-not-allowed"
               />
             </div>
           </div>
 
           {/* Location Fields */}
           <div className="space-y-4">
-            <h2 className="font-mono text-xs uppercase tracking-widest text-ash/70">Location</h2>
+            <h2 className="font-manrope text-xs font-bold uppercase tracking-widest text-[#FFC857]">LOCATION</h2>
             
             <div>
-              <label className="block font-mono text-[10px] tracking-[0.2em] uppercase text-crimson mb-2">
+              <label className="block font-manrope text-[11px] font-semibold tracking-wider uppercase text-[#2596be] mb-2">
                 Address *
               </label>
               <input
@@ -154,13 +159,13 @@ export default function CreatorSetup() {
                 onChange={handleInputChange}
                 placeholder="Street address"
                 required
-                className="w-full bg-ink border border-crimson/30 rounded px-4 py-3 font-mono text-sm text-ash placeholder-ash/30 focus:outline-none focus:border-crimson/70 transition-colors"
+                className="w-full bg-[#0A0A0A] border border-white/15 rounded px-4 py-3 font-manrope text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#2596be] transition-colors"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block font-mono text-[10px] tracking-[0.2em] uppercase text-crimson mb-2">
+                <label className="block font-manrope text-[11px] font-semibold tracking-wider uppercase text-[#2596be] mb-2">
                   City *
                 </label>
                 <input
@@ -170,12 +175,12 @@ export default function CreatorSetup() {
                   onChange={handleInputChange}
                   placeholder="City"
                   required
-                  className="w-full bg-ink border border-crimson/30 rounded px-4 py-3 font-mono text-sm text-ash placeholder-ash/30 focus:outline-none focus:border-crimson/70 transition-colors"
+                  className="w-full bg-[#0A0A0A] border border-white/15 rounded px-4 py-3 font-manrope text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#2596be] transition-colors"
                 />
               </div>
 
               <div>
-                <label className="block font-mono text-[10px] tracking-[0.2em] uppercase text-crimson mb-2">
+                <label className="block font-manrope text-[11px] font-semibold tracking-wider uppercase text-[#2596be] mb-2">
                   Country *
                 </label>
                 <input
@@ -185,7 +190,7 @@ export default function CreatorSetup() {
                   onChange={handleInputChange}
                   placeholder="Country"
                   required
-                  className="w-full bg-ink border border-crimson/30 rounded px-4 py-3 font-mono text-sm text-ash placeholder-ash/30 focus:outline-none focus:border-crimson/70 transition-colors"
+                  className="w-full bg-[#0A0A0A] border border-white/15 rounded px-4 py-3 font-manrope text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#2596be] transition-colors"
                 />
               </div>
             </div>
@@ -193,63 +198,63 @@ export default function CreatorSetup() {
 
           {/* Bio Field */}
           <div className="space-y-4">
-            <h2 className="font-mono text-xs uppercase tracking-widest text-ash/70">About You</h2>
+            <h2 className="font-manrope text-xs font-bold uppercase tracking-widest text-[#FFC857]">ABOUT YOUR CREATIVE VISION</h2>
             
             <div>
-              <label className="block font-mono text-[10px] tracking-[0.2em] uppercase text-crimson mb-2">
+              <label className="block font-manrope text-[11px] font-semibold tracking-wider uppercase text-[#2596be] mb-2">
                 Why Do You Want to Become a Creator?
               </label>
               <textarea
                 name="bio"
                 value={formData.bio}
                 onChange={handleInputChange}
-                placeholder="Tell us about your creative vision and what inspire you..."
+                placeholder="Tell us about your creative vision, storytelling style, and original concepts..."
                 rows={4}
-                className="w-full bg-ink border border-crimson/30 rounded px-4 py-3 font-mono text-sm text-ash placeholder-ash/30 focus:outline-none focus:border-crimson/70 transition-colors resize-none"
+                className="w-full bg-[#0A0A0A] border border-white/15 rounded px-4 py-3 font-manrope text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#2596be] transition-colors resize-none"
               />
-              <p className="font-mono text-[10px] text-ash/40 mt-1">{formData.bio.length}/500</p>
+              <p className="font-manrope text-[10px] text-white/40 mt-1 text-right">{formData.bio.length}/500</p>
             </div>
           </div>
 
           {/* Category Interests */}
           <div className="space-y-4">
-            <h2 className="font-mono text-xs uppercase tracking-widest text-ash/70">Interested Categories</h2>
-            <p className="font-mono text-[10px] text-ash/50">Select at least one category of interest *</p>
+            <h2 className="font-manrope text-xs font-bold uppercase tracking-widest text-[#FFC857]">GENRE INTERESTS</h2>
+            <p className="font-manrope text-[11px] text-white/50">Select at least one genre category for your stories *</p>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {DEFAULT_CATEGORIES.map((category: { name: string; description: string; isDefault: boolean }) => (
                 <label
                   key={category.name}
-                  className="flex items-start gap-3 p-4 border border-crimson/20 rounded cursor-pointer hover:border-crimson/50 hover:bg-crimson/5 transition-all"
+                  className="flex items-start gap-3 p-4 border border-white/10 rounded cursor-pointer hover:border-[#2596be]/50 hover:bg-[#2596be]/5 transition-all"
                 >
                   <input
                     type="checkbox"
                     checked={formData.interests.includes(category.name)}
                     onChange={() => handleCategoryToggle(category.name)}
-                    className="mt-1 w-4 h-4 accent-crimson"
+                    className="mt-1 w-4 h-4 accent-[#2596be]"
                   />
                   <div className="flex-1">
-                    <p className="font-mono text-sm text-ash font-semibold">{category.name}</p>
-                    <p className="font-mono text-[10px] text-ash/50">{category.description}</p>
+                    <p className="font-manrope text-sm text-white font-semibold">{category.name}</p>
+                    <p className="font-manrope text-[10px] text-white/50 leading-relaxed mt-0.5">{category.description}</p>
                   </div>
                 </label>
               ))}
             </div>
           </div>
 
-          {/* Submit Button */}
+          {/* Action Buttons */}
           <div className="pt-8 flex gap-4">
             <button
               type="button"
               onClick={() => router.back()}
-              className="flex-1 font-mono text-[10px] tracking-[0.2em] uppercase border border-ash/30 text-ash/60 hover:text-ash hover:border-ash/60 px-6 py-3 rounded transition-all duration-300"
+              className="flex-1 font-manrope text-xs font-bold tracking-widest uppercase border border-white/20 text-white/70 hover:text-white hover:border-white/50 px-6 py-3.5 rounded transition-all duration-300"
             >
               CANCEL
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 font-mono text-[10px] tracking-[0.2em] uppercase bg-crimson text-ink hover:bg-crimson/90 disabled:bg-crimson/30 px-6 py-3 rounded transition-all duration-300 disabled:cursor-not-allowed"
+              className="flex-1 font-manrope text-xs font-bold tracking-widest uppercase bg-gradient-to-r from-[#2596be] to-[#E63946] hover:from-[#FFC857] hover:to-[#2596be] text-white px-6 py-3.5 rounded transition-all duration-300 disabled:opacity-50 shadow-lg shadow-[#2596be]/20"
             >
               {loading ? 'SETTING UP...' : 'COMPLETE SETUP'}
             </button>

@@ -11,6 +11,8 @@ interface Story {
   _id: string;
   title: string;
   description: string;
+  contentType?: 'text' | 'video';
+  videoUrl?: string;
   coverImage?: string;
   backgroundMusic?: string;
   characterImages?: string[];
@@ -32,9 +34,12 @@ export default function CreatorDashboard() {
   const [newStory, setNewStory] = useState({ 
     title: '', 
     description: '',
-    category: 'Horror'
+    category: 'Horror',
+    contentType: 'text' as 'text' | 'video',
+    videoUrl: ''
   });
   const [coverImage, setCoverImage] = useState<File | null>(null);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
   const [backgroundMusic, setBackgroundMusic] = useState<File | null>(null);
   const [characterImages, setCharacterImages] = useState<File[]>([]);
   const [scenicImages, setScenicImages] = useState<File[]>([]);
@@ -76,7 +81,17 @@ export default function CreatorDashboard() {
       formData.append('title', newStory.title);
       formData.append('description', newStory.description);
       formData.append('category', newStory.category);
+      formData.append('contentType', newStory.contentType);
       formData.append('status', 'published');
+
+      if (newStory.contentType === 'video') {
+        if (videoFile) {
+          formData.append('video', videoFile);
+        } else if (newStory.videoUrl) {
+          formData.append('videoUrl', newStory.videoUrl);
+        }
+      }
+
       if (coverImage) {
         formData.append('coverImage', coverImage);
       }
@@ -87,8 +102,9 @@ export default function CreatorDashboard() {
       scenicImages.forEach((file) => formData.append('scenicImages', file));
       
       await storiesAPI.create(formData);
-      setNewStory({ title: '', description: '', category: 'Horror' });
+      setNewStory({ title: '', description: '', category: 'Horror', contentType: 'text', videoUrl: '' });
       setCoverImage(null);
+      setVideoFile(null);
       setBackgroundMusic(null);
       setCharacterImages([]);
       setScenicImages([]);
@@ -152,6 +168,37 @@ export default function CreatorDashboard() {
             </button>
           ) : (
             <form onSubmit={handleCreateStory} className="max-w-2xl bg-ink/50 border border-crimson/30 p-6 space-y-4">
+              {/* Content Type Selector */}
+              <div>
+                <label className="block font-mono text-xs tracking-widest text-ash/80 mb-2">STORY FORMAT / CONTENT TYPE</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setNewStory({ ...newStory, contentType: 'text' })}
+                    className={`py-3 px-4 rounded border text-xs font-mono tracking-wider transition-all flex items-center justify-center gap-2 ${
+                      newStory.contentType === 'text'
+                        ? 'bg-crimson/20 border-crimson text-white font-bold shadow-[0_0_15px_rgba(200,16,46,0.3)]'
+                        : 'bg-ash/5 border-ash/20 text-ash/60 hover:border-ash/40'
+                    }`}
+                  >
+                    <span>📝</span>
+                    <span>TEXT / COMIC READER</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewStory({ ...newStory, contentType: 'video' })}
+                    className={`py-3 px-4 rounded border text-xs font-mono tracking-wider transition-all flex items-center justify-center gap-2 ${
+                      newStory.contentType === 'video'
+                        ? 'bg-crimson/20 border-crimson text-white font-bold shadow-[0_0_15px_rgba(200,16,46,0.3)]'
+                        : 'bg-ash/5 border-ash/20 text-ash/60 hover:border-ash/40'
+                    }`}
+                  >
+                    <span>🎬</span>
+                    <span>MOTION COMIC VIDEO</span>
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <label className="block font-mono text-xs tracking-widest text-ash/80 mb-2">TITLE</label>
                 <input
@@ -172,6 +219,39 @@ export default function CreatorDashboard() {
                   required
                 />
               </div>
+
+              {/* Video upload / URL section if video is selected */}
+              {newStory.contentType === 'video' && (
+                <div className="p-4 bg-crimson/10 border border-crimson/30 rounded space-y-3">
+                  <label className="block font-mono text-xs tracking-widest text-crimson font-bold uppercase">
+                    🎬 MOTION COMIC VIDEO FILE OR URL
+                  </label>
+                  <div>
+                    <span className="block font-mono text-[10px] text-ash/70 mb-1 uppercase">Upload Video File (.mp4, .webm, .mov):</span>
+                    <input
+                      type="file"
+                      accept="video/*"
+                      onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
+                      className="w-full px-4 py-2 bg-ink/80 border border-crimson/30 text-white file:mr-4 file:px-3 file:py-1 file:border-0 file:bg-crimson/30 file:text-crimson hover:file:bg-crimson/50 font-mono text-xs"
+                    />
+                    {videoFile && (
+                      <p className="font-mono text-xs text-green-400 mt-1">Selected video file: {videoFile.name}</p>
+                    )}
+                  </div>
+                  <div className="text-center font-mono text-xs text-ash/40 uppercase">OR</div>
+                  <div>
+                    <span className="block font-mono text-[10px] text-ash/70 mb-1 uppercase">Direct Video URL:</span>
+                    <input
+                      type="url"
+                      placeholder="https://example.com/motion-comic.mp4"
+                      value={newStory.videoUrl}
+                      onChange={(e) => setNewStory({ ...newStory, videoUrl: e.target.value })}
+                      className="w-full px-4 py-2 bg-ink/80 border border-crimson/30 text-white focus:border-crimson outline-none font-mono text-xs"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div>
                 <CategorySelector 
                   defaultCategory={newStory.category}

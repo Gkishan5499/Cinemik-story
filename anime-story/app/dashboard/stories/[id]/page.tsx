@@ -11,9 +11,17 @@ interface Story {
   _id: string;
   title: string;
   description: string;
+  contentType?: 'text' | 'video';
+  videoUrl?: string;
   backgroundMusic?: string;
   status?: 'published' | 'draft';
   createdAt: string;
+}
+
+interface EpisodeVideoSection {
+  title?: string;
+  videoUrl: string;
+  sectionNumber?: number;
 }
 
 interface Episode {
@@ -21,6 +29,9 @@ interface Episode {
   episodeNumber: number;
   title: string;
   content: string;
+  contentType?: 'text' | 'video';
+  videoUrl?: string;
+  videoSections?: EpisodeVideoSection[];
   images?: string[];
   createdAt: string;
 }
@@ -29,12 +40,22 @@ interface EpisodeFormState {
   episodeNumber: number;
   title: string;
   content: string;
+  contentType: 'text' | 'video';
+  videoUrl: string;
+}
+
+interface SectionInput {
+  title: string;
+  videoUrl: string;
+  file?: File | null;
 }
 
 const initialEpisodeForm: EpisodeFormState = {
   episodeNumber: 1,
   title: '',
   content: '',
+  contentType: 'text',
+  videoUrl: '',
 };
 
 export default function StoryEditorPage() {
@@ -49,7 +70,14 @@ export default function StoryEditorPage() {
   const [pageLoading, setPageLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [storyData, setStoryData] = useState({ title: '', description: '', backgroundMusic: '' });
+  const [storyData, setStoryData] = useState({
+    title: '',
+    description: '',
+    contentType: 'text' as 'text' | 'video',
+    videoUrl: '',
+    backgroundMusic: ''
+  });
+  const [storyVideoFile, setStoryVideoFile] = useState<File | null>(null);
   const [newBackgroundMusic, setNewBackgroundMusic] = useState<File | null>(null);
   const [savingStory, setSavingStory] = useState(false);
   const [togglingPublish, setTogglingPublish] = useState(false);
@@ -57,11 +85,15 @@ export default function StoryEditorPage() {
   const [showCreateEpisode, setShowCreateEpisode] = useState(false);
   const [creatingEpisode, setCreatingEpisode] = useState(false);
   const [newEpisode, setNewEpisode] = useState<EpisodeFormState>(initialEpisodeForm);
+  const [newVideoSections, setNewVideoSections] = useState<SectionInput[]>([
+    { title: 'Part 1', videoUrl: '', file: null }
+  ]);
   const [episodeImages, setEpisodeImages] = useState<File[]>([]);
 
   const [editingEpisodeId, setEditingEpisodeId] = useState<string | null>(null);
   const [updatingEpisode, setUpdatingEpisode] = useState(false);
   const [editEpisodeData, setEditEpisodeData] = useState<EpisodeFormState>(initialEpisodeForm);
+  const [editVideoSections, setEditVideoSections] = useState<SectionInput[]>([]);
   const [editEpisodeImages, setEditEpisodeImages] = useState<File[]>([]);
 
   useEffect(() => {
@@ -92,6 +124,8 @@ export default function StoryEditorPage() {
       setStoryData({
         title: storyRes.story.title,
         description: storyRes.story.description,
+        contentType: storyRes.story.contentType || 'text',
+        videoUrl: storyRes.story.videoUrl || '',
         backgroundMusic: storyRes.story.backgroundMusic || '',
       });
 
@@ -119,6 +153,16 @@ export default function StoryEditorPage() {
       const formData = new FormData();
       formData.append('title', storyData.title);
       formData.append('description', storyData.description);
+      formData.append('contentType', storyData.contentType);
+
+      if (storyData.contentType === 'video') {
+        if (storyVideoFile) {
+          formData.append('video', storyVideoFile);
+        } else if (storyData.videoUrl) {
+          formData.append('videoUrl', storyData.videoUrl);
+        }
+      }
+
       if (newBackgroundMusic) {
         formData.append('backgroundMusic', newBackgroundMusic);
       }
@@ -127,8 +171,11 @@ export default function StoryEditorPage() {
       setStory(res.story);
       setStoryData((prev) => ({
         ...prev,
+        contentType: res.story.contentType || prev.contentType,
+        videoUrl: res.story.videoUrl || prev.videoUrl,
         backgroundMusic: res.story.backgroundMusic || prev.backgroundMusic,
       }));
+      setStoryVideoFile(null);
       setNewBackgroundMusic(null);
     } catch {
       setError('Failed to update story');
@@ -136,6 +183,7 @@ export default function StoryEditorPage() {
       setSavingStory(false);
     }
   };
+
   const handleTogglePublish = async () => {
     if (!storyId) return;
     try {
@@ -149,6 +197,7 @@ export default function StoryEditorPage() {
       setTogglingPublish(false);
     }
   };
+
   const handleCreateEpisode = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!storyId) return;
@@ -161,12 +210,28 @@ export default function StoryEditorPage() {
       formData.append('episodeNumber', String(newEpisode.episodeNumber));
       formData.append('title', newEpisode.title);
       formData.append('content', newEpisode.content);
+      formData.append('contentType', newEpisode.contentType);
+
+      if (newEpisode.contentType === 'video') {
+        const payloadSections: Array<{ title: string; videoUrl: string }> = [];
+        newVideoSections.forEach((sec) => {
+          if (sec.file) {
+            payloadSections.push({ title: sec.title, videoUrl: `file_placeholder:${sec.title}` });
+            formData.append('video', sec.file);
+          } else if (sec.videoUrl.trim()) {
+            payloadSections.push({ title: sec.title, videoUrl: sec.videoUrl.trim() });
+          }
+        });
+        formData.append('videoSections', JSON.stringify(payloadSections));
+      }
+
       episodeImages.forEach((file) => formData.append('images', file));
 
       await episodesAPI.create(storyId, formData);
 
       setShowCreateEpisode(false);
       setEpisodeImages([]);
+      setNewVideoSections([{ title: 'Part 1', videoUrl: '', file: null }]);
       setNewEpisode({ ...initialEpisodeForm, episodeNumber: episodes.length + 2 });
       await loadData();
     } catch {
@@ -181,14 +246,32 @@ export default function StoryEditorPage() {
     setEditEpisodeData({
       episodeNumber: episode.episodeNumber,
       title: episode.title,
-      content: episode.content,
+      content: episode.content || '',
+      contentType: episode.contentType || 'text',
+      videoUrl: episode.videoUrl || '',
     });
+
+    if (episode.videoSections && episode.videoSections.length > 0) {
+      setEditVideoSections(
+        episode.videoSections.map((sec, idx) => ({
+          title: sec.title || `Part ${idx + 1}`,
+          videoUrl: sec.videoUrl || '',
+          file: null,
+        }))
+      );
+    } else {
+      setEditVideoSections([
+        { title: 'Part 1', videoUrl: episode.videoUrl || '', file: null }
+      ]);
+    }
+
     setEditEpisodeImages([]);
   };
 
   const cancelEditEpisode = () => {
     setEditingEpisodeId(null);
     setEditEpisodeData(initialEpisodeForm);
+    setEditVideoSections([]);
     setEditEpisodeImages([]);
   };
 
@@ -204,6 +287,21 @@ export default function StoryEditorPage() {
       formData.append('episodeNumber', String(editEpisodeData.episodeNumber));
       formData.append('title', editEpisodeData.title);
       formData.append('content', editEpisodeData.content);
+      formData.append('contentType', editEpisodeData.contentType);
+
+      if (editEpisodeData.contentType === 'video') {
+        const payloadSections: Array<{ title: string; videoUrl: string }> = [];
+        editVideoSections.forEach((sec) => {
+          if (sec.file) {
+            payloadSections.push({ title: sec.title, videoUrl: `file_placeholder:${sec.title}` });
+            formData.append('video', sec.file);
+          } else if (sec.videoUrl.trim()) {
+            payloadSections.push({ title: sec.title, videoUrl: sec.videoUrl.trim() });
+          }
+        });
+        formData.append('videoSections', JSON.stringify(payloadSections));
+      }
+
       editEpisodeImages.forEach((file) => formData.append('images', file));
 
       await episodesAPI.update(storyId, editingEpisodeId, formData);
@@ -304,6 +402,70 @@ export default function StoryEditorPage() {
               />
             </div>
 
+            {/* Story Format Selector */}
+            <div>
+              <label className='block mb-2 text-sm text-white/80 font-mono text-xs tracking-wider uppercase'>
+                Story Default Format
+              </label>
+              <div className='grid grid-cols-2 gap-3 max-w-md'>
+                <button
+                  type='button'
+                  onClick={() => setStoryData((prev) => ({ ...prev, contentType: 'text' }))}
+                  className={`py-2 px-3 rounded border text-xs font-mono tracking-wider transition-all flex items-center justify-center gap-2 ${
+                    storyData.contentType === 'text'
+                      ? 'bg-red-500/20 border-red-500 text-white font-bold'
+                      : 'bg-white/5 border-white/20 text-white/60 hover:border-white/40'
+                  }`}
+                >
+                  <span>📝 Text / Comic Reader</span>
+                </button>
+                <button
+                  type='button'
+                  onClick={() => setStoryData((prev) => ({ ...prev, contentType: 'video' }))}
+                  className={`py-2 px-3 rounded border text-xs font-mono tracking-wider transition-all flex items-center justify-center gap-2 ${
+                    storyData.contentType === 'video'
+                      ? 'bg-red-500/20 border-red-500 text-white font-bold'
+                      : 'bg-white/5 border-white/20 text-white/60 hover:border-white/40'
+                  }`}
+                >
+                  <span>🎬 Motion Comic Video</span>
+                </button>
+              </div>
+            </div>
+
+            {storyData.contentType === 'video' && (
+              <div className='p-4 rounded border border-red-500/40 bg-red-500/10 space-y-3'>
+                <p className='font-mono text-xs text-red-300 font-bold uppercase'>🎬 Main Story Motion Comic Video</p>
+                {storyData.videoUrl && (
+                  <div className='mb-2'>
+                    <p className='text-xs text-white/60 mb-1'>Current Video Preview:</p>
+                    <video src={storyData.videoUrl} controls className='w-full max-h-48 rounded bg-black' />
+                  </div>
+                )}
+                <div>
+                  <label className='block text-xs text-white/80 mb-1'>Upload Video File (.mp4, .webm, .mov):</label>
+                  <input
+                    type='file'
+                    accept='video/*'
+                    onChange={(e) => setStoryVideoFile(e.target.files?.[0] || null)}
+                    className='w-full rounded border border-white/20 bg-black/50 px-3 py-2 text-xs outline-none file:mr-3 file:rounded file:border-0 file:bg-red-500/20 file:px-2.5 file:py-1 file:text-red-200'
+                  />
+                  {storyVideoFile && <p className='text-xs text-green-400 mt-1'>Selected: {storyVideoFile.name}</p>}
+                </div>
+                <div className='text-center font-mono text-xs text-white/40'>OR</div>
+                <div>
+                  <label className='block text-xs text-white/80 mb-1'>Direct Video URL:</label>
+                  <input
+                    type='url'
+                    placeholder='https://example.com/video.mp4'
+                    value={storyData.videoUrl}
+                    onChange={(e) => setStoryData((prev) => ({ ...prev, videoUrl: e.target.value }))}
+                    className='w-full rounded border border-white/20 bg-black/50 px-3 py-2 text-xs outline-none focus:border-red-400'
+                  />
+                </div>
+              </div>
+            )}
+
             <div>
               <label htmlFor='story-music' className='block mb-2 text-sm text-white/80'>
                 Background Music (optional)
@@ -363,6 +525,37 @@ export default function StoryEditorPage() {
           <form onSubmit={handleCreateEpisode} className='mb-8 rounded-lg border border-white/15 bg-white/5 p-6 space-y-4'>
             <h3 className='text-xl font-medium'>Create Episode</h3>
 
+            {/* Episode Format Selector */}
+            <div>
+              <label className='block mb-2 text-sm text-white/80 font-mono text-xs tracking-wider uppercase'>
+                Episode Content Format
+              </label>
+              <div className='grid grid-cols-2 gap-3 max-w-md'>
+                <button
+                  type='button'
+                  onClick={() => setNewEpisode((prev) => ({ ...prev, contentType: 'text' }))}
+                  className={`py-2 px-3 rounded border text-xs font-mono tracking-wider transition-all flex items-center justify-center gap-2 ${
+                    newEpisode.contentType === 'text'
+                      ? 'bg-red-500/20 border-red-500 text-white font-bold'
+                      : 'bg-white/5 border-white/20 text-white/60 hover:border-white/40'
+                  }`}
+                >
+                  <span>📝 Text / Panel Story</span>
+                </button>
+                <button
+                  type='button'
+                  onClick={() => setNewEpisode((prev) => ({ ...prev, contentType: 'video' }))}
+                  className={`py-2 px-3 rounded border text-xs font-mono tracking-wider transition-all flex items-center justify-center gap-2 ${
+                    newEpisode.contentType === 'video'
+                      ? 'bg-red-500/20 border-red-500 text-white font-bold'
+                      : 'bg-white/5 border-white/20 text-white/60 hover:border-white/40'
+                  }`}
+                >
+                  <span>🎬 Motion Comic Video</span>
+                </button>
+              </div>
+            </div>
+
             <div className='grid gap-4 md:grid-cols-2'>
               <div>
                 <label htmlFor='new-episode-number' className='block mb-2 text-sm text-white/80'>
@@ -399,21 +592,105 @@ export default function StoryEditorPage() {
               </div>
             </div>
 
+            {newEpisode.contentType === 'video' && (
+              <div className='p-4 rounded border border-red-500/40 bg-red-500/10 space-y-4'>
+                <div className='flex items-center justify-between'>
+                  <p className='font-mono text-xs text-red-300 font-bold uppercase flex items-center gap-2'>
+                    <span>🎬</span> MULTI-PART MOTION COMIC VIDEOS (PART 1, PART 2...)
+                  </p>
+                  <button
+                    type='button'
+                    onClick={() =>
+                      setNewVideoSections((prev) => [
+                        ...prev,
+                        { title: `Part ${prev.length + 1}`, videoUrl: '', file: null },
+                      ])
+                    }
+                    className='px-3 py-1 bg-red-500/20 border border-red-500/50 text-red-300 text-xs font-mono uppercase hover:bg-red-500/30 rounded'
+                  >
+                    + ADD PART
+                  </button>
+                </div>
+
+                <div className='space-y-3'>
+                  {newVideoSections.map((sec, idx) => (
+                    <div key={idx} className='p-3 bg-black/40 border border-white/15 rounded space-y-2'>
+                      <div className='flex items-center justify-between gap-3'>
+                        <input
+                          type='text'
+                          value={sec.title}
+                          onChange={(e) =>
+                            setNewVideoSections((prev) =>
+                              prev.map((item, i) => (i === idx ? { ...item, title: e.target.value } : item))
+                            )
+                          }
+                          placeholder={`Part ${idx + 1} Title (e.g. Part ${idx + 1})`}
+                          className='w-full px-3 py-1.5 bg-black/60 border border-white/20 text-xs text-white rounded font-mono'
+                          required
+                        />
+                        {newVideoSections.length > 1 && (
+                          <button
+                            type='button'
+                            onClick={() => setNewVideoSections((prev) => prev.filter((_, i) => i !== idx))}
+                            className='px-2 py-1 text-xs text-red-400 hover:text-red-300 font-mono uppercase'
+                          >
+                            REMOVE
+                          </button>
+                        )}
+                      </div>
+
+                      <div className='grid gap-2 md:grid-cols-2'>
+                        <div>
+                          <span className='block font-mono text-[10px] text-white/60 mb-1'>Upload Part Video (.mp4, .webm):</span>
+                          <input
+                            type='file'
+                            accept='video/*'
+                            onChange={(e) =>
+                              setNewVideoSections((prev) =>
+                                prev.map((item, i) => (i === idx ? { ...item, file: e.target.files?.[0] || null } : item))
+                              )
+                            }
+                            className='w-full rounded border border-white/20 bg-black/50 px-2 py-1 text-xs text-white file:mr-2 file:py-0.5 file:px-2 file:border-0 file:bg-red-500/20 file:text-red-300 font-mono'
+                          />
+                          {sec.file && <p className='text-[10px] text-green-400 mt-1'>Selected: {sec.file.name}</p>}
+                        </div>
+
+                        <div>
+                          <span className='block font-mono text-[10px] text-white/60 mb-1'>OR Direct Video URL:</span>
+                          <input
+                            type='url'
+                            placeholder='https://example.com/part-video.mp4'
+                            value={sec.videoUrl}
+                            onChange={(e) =>
+                              setNewVideoSections((prev) =>
+                                prev.map((item, i) => (i === idx ? { ...item, videoUrl: e.target.value } : item))
+                              )
+                            }
+                            className='w-full rounded border border-white/20 bg-black/50 px-2 py-1.5 text-xs text-white outline-none focus:border-red-400 font-mono'
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div>
               <label htmlFor='new-episode-content' className='block mb-2 text-sm text-white/80'>
-                Content
+                {newEpisode.contentType === 'video' ? 'Episode Summary / Description (Optional)' : 'Content / Script'}
               </label>
               <textarea
                 id='new-episode-content'
                 value={newEpisode.content}
                 onChange={(e) => setNewEpisode((prev) => ({ ...prev, content: e.target.value }))}
-                className='w-full min-h-40 rounded border border-white/20 bg-black/50 px-3 py-2 outline-none focus:border-red-400'
-                required
+                className='w-full min-h-32 rounded border border-white/20 bg-black/50 px-3 py-2 outline-none focus:border-red-400'
+                required={newEpisode.contentType !== 'video'}
               />
             </div>
 
             <div>
-              <p className='mb-2 text-sm text-white/80'>Episode Images</p>
+              <p className='mb-2 text-sm text-white/80'>Episode Images (Optional / Panels)</p>
               <ImageUpload onImagesSelected={setEpisodeImages} multiple={true} preview={true} />
             </div>
 
@@ -421,7 +698,7 @@ export default function StoryEditorPage() {
               <button
                 type='submit'
                 disabled={creatingEpisode}
-                className='rounded border border-red-400/70 px-4 py-2 text-red-300 hover:bg-red-500/10 disabled:opacity-60'
+                className='rounded border border-red-400/70 px-4 py-2 text-red-300 hover:bg-red-500/10 disabled:opacity-60 font-mono text-xs uppercase'
               >
                 {creatingEpisode ? 'Creating...' : 'Create Episode'}
               </button>
@@ -430,8 +707,9 @@ export default function StoryEditorPage() {
                 onClick={() => {
                   setShowCreateEpisode(false);
                   setEpisodeImages([]);
+                  setNewVideoSections([{ title: 'Part 1', videoUrl: '', file: null }]);
                 }}
-                className='rounded border border-white/30 px-4 py-2 text-white/80 hover:bg-white/10'
+                className='rounded border border-white/30 px-4 py-2 text-white/80 hover:bg-white/10 font-mono text-xs uppercase'
               >
                 Cancel
               </button>
@@ -445,15 +723,55 @@ export default function StoryEditorPage() {
           <div className='space-y-4'>
             {episodes.map((episode) => {
               const isEditingThis = editingEpisodeId === episode._id;
+              const isVideoEp = episode.contentType === 'video' || Boolean(episode.videoUrl);
 
               return (
                 <article key={episode._id} className='rounded-lg border border-white/15 bg-white/5 p-5'>
                   {!isEditingThis ? (
                     <div className='flex items-start justify-between gap-4'>
                       <div className='flex-1'>
-                        <p className='text-sm text-red-300'>Episode {episode.episodeNumber}</p>
-                        <h3 className='text-xl font-medium mt-1'>{episode.title}</h3>
-                        <p className='mt-3 text-white/75 whitespace-pre-wrap line-clamp-4'>{episode.content}</p>
+                        <div className='flex items-center gap-2 mb-1 flex-wrap'>
+                          <span className='text-sm text-red-300 font-mono'>Episode {episode.episodeNumber}</span>
+                          {isVideoEp && (
+                            <span className='px-2 py-0.5 text-[10px] font-mono tracking-wider bg-red-500/20 border border-red-500/60 text-red-300 rounded uppercase flex items-center gap-1'>
+                              🎬 MOTION COMIC VIDEO {episode.videoSections && episode.videoSections.length > 1 ? `(${episode.videoSections.length} PARTS)` : ''}
+                            </span>
+                          )}
+                        </div>
+                        <h3 className='text-xl font-medium'>{episode.title}</h3>
+
+                        {isVideoEp && (
+                          <div className='mt-3 max-w-xl space-y-3'>
+                            {episode.videoSections && episode.videoSections.length > 0 ? (
+                              <div className='space-y-3'>
+                                {episode.videoSections.map((sec, secIdx) => (
+                                  <div key={secIdx} className='rounded border border-red-500/30 bg-black/60 overflow-hidden'>
+                                    <div className='px-3 py-1.5 bg-red-500/20 border-b border-red-500/30 flex items-center justify-between font-mono text-xs text-red-200'>
+                                      <span>🎬 {sec.title || `Part ${secIdx + 1}`}</span>
+                                      <span className='text-[10px] text-white/50'>Part {secIdx + 1} of {episode.videoSections?.length || 1}</span>
+                                    </div>
+                                    {sec.videoUrl ? (
+                                      <video src={sec.videoUrl} controls className='w-full max-h-56 bg-black' />
+                                    ) : (
+                                      <div className='p-3 text-xs text-white/40 font-mono'>No video file uploaded for this part</div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : episode.videoUrl ? (
+                              <div className='rounded overflow-hidden border border-red-500/30 bg-black'>
+                                <div className='px-3 py-1 bg-red-500/20 text-xs font-mono text-red-200 border-b border-red-500/30'>
+                                  🎬 Part 1
+                                </div>
+                                <video src={episode.videoUrl} controls className='w-full max-h-56' />
+                              </div>
+                            ) : null}
+                          </div>
+                        )}
+
+                        {episode.content && (
+                          <p className='mt-3 text-white/75 whitespace-pre-wrap line-clamp-3 text-sm'>{episode.content}</p>
+                        )}
                         
                         {/* Episode Images Preview */}
                         {episode.images && episode.images.length > 0 && (
@@ -483,14 +801,14 @@ export default function StoryEditorPage() {
                         <button
                           type='button'
                           onClick={() => startEditEpisode(episode)}
-                          className='rounded border border-blue-400/70 px-3 py-1.5 text-blue-200 hover:bg-blue-500/10'
+                          className='rounded border border-blue-400/70 px-3 py-1.5 text-blue-200 hover:bg-blue-500/10 text-xs font-mono uppercase'
                         >
                           Edit
                         </button>
                         <button
                           type='button'
                           onClick={() => handleDeleteEpisode(episode._id)}
-                          className='rounded border border-red-400/70 px-3 py-1.5 text-red-300 hover:bg-red-500/10'
+                          className='rounded border border-red-400/70 px-3 py-1.5 text-red-300 hover:bg-red-500/10 text-xs font-mono uppercase'
                         >
                           Delete
                         </button>
@@ -499,6 +817,37 @@ export default function StoryEditorPage() {
                   ) : (
                     <form onSubmit={handleUpdateEpisode} className='space-y-4'>
                       <h3 className='text-lg font-medium'>Edit Episode</h3>
+
+                      {/* Episode Format Selector */}
+                      <div>
+                        <label className='block mb-2 text-sm text-white/80 font-mono text-xs tracking-wider uppercase'>
+                          Episode Content Format
+                        </label>
+                        <div className='grid grid-cols-2 gap-3 max-w-md'>
+                          <button
+                            type='button'
+                            onClick={() => setEditEpisodeData((prev) => ({ ...prev, contentType: 'text' }))}
+                            className={`py-2 px-3 rounded border text-xs font-mono tracking-wider transition-all flex items-center justify-center gap-2 ${
+                              editEpisodeData.contentType === 'text'
+                                ? 'bg-red-500/20 border-red-500 text-white font-bold'
+                                : 'bg-white/5 border-white/20 text-white/60 hover:border-white/40'
+                            }`}
+                          >
+                            <span>📝 Text / Panel Story</span>
+                          </button>
+                          <button
+                            type='button'
+                            onClick={() => setEditEpisodeData((prev) => ({ ...prev, contentType: 'video' }))}
+                            className={`py-2 px-3 rounded border text-xs font-mono tracking-wider transition-all flex items-center justify-center gap-2 ${
+                              editEpisodeData.contentType === 'video'
+                                ? 'bg-red-500/20 border-red-500 text-white font-bold'
+                                : 'bg-white/5 border-white/20 text-white/60 hover:border-white/40'
+                            }`}
+                          >
+                            <span>🎬 Motion Comic Video</span>
+                          </button>
+                        </div>
+                      </div>
 
                       <div className='grid gap-4 md:grid-cols-2'>
                         <div>
@@ -536,16 +885,100 @@ export default function StoryEditorPage() {
                         </div>
                       </div>
 
+                      {editEpisodeData.contentType === 'video' && (
+                        <div className='p-4 rounded border border-red-500/40 bg-red-500/10 space-y-4'>
+                          <div className='flex items-center justify-between'>
+                            <p className='font-mono text-xs text-red-300 font-bold uppercase flex items-center gap-2'>
+                              <span>🎬</span> EDIT MULTI-PART MOTION COMIC VIDEOS (PART 1, PART 2...)
+                            </p>
+                            <button
+                              type='button'
+                              onClick={() =>
+                                setEditVideoSections((prev) => [
+                                  ...prev,
+                                  { title: `Part ${prev.length + 1}`, videoUrl: '', file: null },
+                                ])
+                              }
+                              className='px-3 py-1 bg-red-500/20 border border-red-500/50 text-red-300 text-xs font-mono uppercase hover:bg-red-500/30 rounded'
+                            >
+                              + ADD PART
+                            </button>
+                          </div>
+
+                          <div className='space-y-3'>
+                            {editVideoSections.map((sec, idx) => (
+                              <div key={idx} className='p-3 bg-black/40 border border-white/15 rounded space-y-2'>
+                                <div className='flex items-center justify-between gap-3'>
+                                  <input
+                                    type='text'
+                                    value={sec.title}
+                                    onChange={(e) =>
+                                      setEditVideoSections((prev) =>
+                                        prev.map((item, i) => (i === idx ? { ...item, title: e.target.value } : item))
+                                      )
+                                    }
+                                    placeholder={`Part ${idx + 1} Title`}
+                                    className='w-full px-3 py-1.5 bg-black/60 border border-white/20 text-xs text-white rounded font-mono'
+                                    required
+                                  />
+                                  {editVideoSections.length > 1 && (
+                                    <button
+                                      type='button'
+                                      onClick={() => setEditVideoSections((prev) => prev.filter((_, i) => i !== idx))}
+                                      className='px-2 py-1 text-xs text-red-400 hover:text-red-300 font-mono uppercase'
+                                    >
+                                      REMOVE
+                                    </button>
+                                  )}
+                                </div>
+
+                                <div className='grid gap-2 md:grid-cols-2'>
+                                  <div>
+                                    <span className='block font-mono text-[10px] text-white/60 mb-1'>Replace File (.mp4, .webm):</span>
+                                    <input
+                                      type='file'
+                                      accept='video/*'
+                                      onChange={(e) =>
+                                        setEditVideoSections((prev) =>
+                                          prev.map((item, i) => (i === idx ? { ...item, file: e.target.files?.[0] || null } : item))
+                                        )
+                                      }
+                                      className='w-full rounded border border-white/20 bg-black/50 px-2 py-1 text-xs text-white file:mr-2 file:py-0.5 file:px-2 file:border-0 file:bg-red-500/20 file:text-red-300 font-mono'
+                                    />
+                                    {sec.file && <p className='text-[10px] text-green-400 mt-1'>Selected: {sec.file.name}</p>}
+                                  </div>
+
+                                  <div>
+                                    <span className='block font-mono text-[10px] text-white/60 mb-1'>OR Video URL:</span>
+                                    <input
+                                      type='url'
+                                      placeholder='https://example.com/part-video.mp4'
+                                      value={sec.videoUrl}
+                                      onChange={(e) =>
+                                        setEditVideoSections((prev) =>
+                                          prev.map((item, i) => (i === idx ? { ...item, videoUrl: e.target.value } : item))
+                                        )
+                                      }
+                                      className='w-full rounded border border-white/20 bg-black/50 px-2 py-1.5 text-xs text-white outline-none focus:border-red-400 font-mono'
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       <div>
                         <label htmlFor={`edit-content-${episode._id}`} className='block mb-2 text-sm text-white/80'>
-                          Content
+                          {editEpisodeData.contentType === 'video' ? 'Description / Transcript (Optional)' : 'Content / Script'}
                         </label>
                         <textarea
                           id={`edit-content-${episode._id}`}
                           value={editEpisodeData.content}
                           onChange={(e) => setEditEpisodeData((prev) => ({ ...prev, content: e.target.value }))}
                           className='w-full min-h-36 rounded border border-white/20 bg-black/50 px-3 py-2 outline-none focus:border-red-400'
-                          required
+                          required={editEpisodeData.contentType !== 'video'}
                         />
                       </div>
 

@@ -21,10 +21,19 @@ interface StoryItem {
   creator?: { username: string };
 }
 
+interface EpisodeVideoSection {
+  title?: string;
+  videoUrl: string;
+  sectionNumber?: number;
+}
+
 interface EpisodeItem {
   _id: string;
   title: string;
   content: string;
+  contentType?: 'text' | 'video';
+  videoUrl?: string;
+  videoSections?: EpisodeVideoSection[];
   episodeNumber: number;
   images?: string[];
   createdAt: string;
@@ -42,6 +51,74 @@ interface ReaderBlock {
   type: 'narration' | 'dialogue' | 'divider';
   text: string;
   speaker?: string;
+}
+
+interface MotionComicVideoCardProps {
+  url: string;
+  index: number;
+  title?: string;
+  partNumber?: number;
+}
+
+function MotionComicVideoCard({ url, index, title, partNumber }: MotionComicVideoCardProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isPlaying, setIsPlaying] = useState(true);
+
+  const togglePlay = () => {
+    if (!videoRef.current) return;
+    if (videoRef.current.paused) {
+      void videoRef.current.play().catch(() => {});
+      setIsPlaying(true);
+    } else {
+      videoRef.current.pause();
+      setIsPlaying(false);
+    }
+  };
+
+  return (
+    <div
+      id={`video-part-${partNumber || index + 1}`}
+      onClick={togglePlay}
+      className={`relative w-full overflow-hidden cursor-pointer group p-0 m-0 leading-none block ${
+        index > 0 ? '-mt-[2px]' : ''
+      }`}
+      style={{ isolation: 'isolate' }}
+    >
+      {/* Part Header Badge Overlay */}
+      {title && (
+        <div className='absolute top-3 left-3 z-10 bg-black/80 backdrop-blur-md border border-crimson/50 px-3 py-1 rounded text-crimson font-mono text-[11px] tracking-wider uppercase shadow-lg flex items-center gap-2 pointer-events-none'>
+          <span className='w-2 h-2 rounded-full bg-crimson animate-pulse' />
+          <span>{title}</span>
+        </div>
+      )}
+
+      <video
+        ref={videoRef}
+        src={url}
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload='auto'
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onContextMenu={(e) => e.preventDefault()}
+        className='w-full h-auto object-cover mx-auto pointer-events-none block p-0 m-0 border-0 outline-none -mb-[1px]'
+        style={{ display: 'block', verticalAlign: 'bottom' }}
+      />
+
+      {/* Play Overlay Indicator if Paused - Toggles opacity to prevent DOM removal errors */}
+      <div
+        className={`absolute inset-0 bg-black/40 flex items-center justify-center pointer-events-none transition-opacity duration-300 ${
+          isPlaying ? 'opacity-0' : 'opacity-100'
+        }`}
+      >
+        <div className='w-16 h-16 rounded-full bg-black/70 border border-crimson/50 text-crimson flex items-center justify-center text-2xl shadow-lg'>
+          <span>▶</span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function EpisodePage() {
@@ -145,7 +222,30 @@ export default function EpisodePage() {
     };
   }, [episode, episodesInStory]);
 
-  const readerBlocks = useMemo(() => {
+  const motionComicVideos = useMemo(() => {
+    if (!episode) return [];
+    if (episode.videoSections && episode.videoSections.length > 0) {
+      return episode.videoSections
+        .filter((s) => Boolean(s.videoUrl))
+        .map((s, idx) => ({
+          url: s.videoUrl,
+          title: s.title || `Part ${idx + 1}`,
+          partNumber: idx + 1,
+        }));
+    }
+    if (episode.videoUrl) {
+      return [
+        {
+          url: episode.videoUrl,
+          title: 'Part 1',
+          partNumber: 1,
+        },
+      ];
+    }
+    return [];
+  }, [episode]);
+
+  const readerBlocks = useMemo<ReaderBlock[]>(() => {
     if (!episode?.content) return [] as ReaderBlock[];
 
     const lines = episode.content.split('\n');
@@ -192,10 +292,15 @@ export default function EpisodePage() {
 
   useGSAP(
     () => {
+      if (!episode || episode.contentType === 'video') return;
+
       const blocks = gsap.utils.toArray<HTMLElement>('.reader-block');
       const images = gsap.utils.toArray<HTMLElement>('.reader-image');
 
+      if (blocks.length === 0 && images.length === 0) return;
+
       blocks.forEach((block) => {
+        if (!block) return;
         gsap.fromTo(
           block,
           { opacity: 0, y: 36, filter: 'blur(8px)' },
@@ -215,6 +320,7 @@ export default function EpisodePage() {
       });
 
       images.forEach((image) => {
+        if (!image) return;
         gsap.fromTo(
           image,
           { opacity: 0, y: 24, scale: 0.97 },
@@ -233,7 +339,7 @@ export default function EpisodePage() {
         );
       });
     },
-    { scope: containerRef, dependencies: [episode?._id] }
+    { scope: containerRef, dependencies: [episode?._id, episode?.contentType] }
   );
 
   if (loading) {
@@ -253,7 +359,8 @@ export default function EpisodePage() {
     );
   }
 
-  const topBannerImage = episode.images?.[0] || episode.storyCover;
+  const isVideoMode = episode.contentType === 'video' || motionComicVideos.length > 0;
+  const topBannerImage = isVideoMode ? null : (episode.images?.[0] || episode.storyCover);
 
   const toggleMusic = async () => {
     if (!audioRef.current) return;
@@ -343,105 +450,154 @@ export default function EpisodePage() {
           </section>
         )}
 
-        {episode.images && episode.images.length > 0 && (
-          <div className='mb-12'>
-            <p className='font-mono text-[10px] tracking-[0.3em] text-ash/40 uppercase mb-4 text-center'>Episode Images</p>
-            <div className={episode.images.length === 1 ? 'grid grid-cols-1 max-w-3xl mx-auto gap-4' : 'grid grid-cols-1 md:grid-cols-2 gap-4'}>
-              {episode.images.map((img, idx) => (
-                <div key={idx} className='reader-image rounded-sm overflow-hidden border border-border/30 bg-black/20'>
-                  <img
-                    src={img}
-                    alt={`${episode.title} ${idx + 1}`}
-                    className='w-full h-72 md:h-96 object-cover object-center hover:scale-[1.02] transition-transform duration-500'
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {episode.storyCharacterImages && episode.storyCharacterImages.length > 0 && (
-          <div className='mb-12'>
-            <p className='font-mono text-[10px] tracking-[0.3em] text-crimson uppercase mb-4 text-center'>Character Pictures</p>
-            <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
-              {episode.storyCharacterImages.map((img, idx) => (
-                <div key={`char-${idx}`} className='reader-image rounded-sm overflow-hidden border border-crimson/25 bg-black/20'>
-                  <img
-                    src={img}
-                    alt={`Character ${idx + 1}`}
-                    className='w-full h-56 object-cover object-center hover:scale-[1.02] transition-transform duration-500'
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {episode.storyScenicImages && episode.storyScenicImages.length > 0 && (
-          <div className='mb-12'>
-            <p className='font-mono text-[10px] tracking-[0.3em] text-crimson uppercase mb-4 text-center'>Scenic Pictures</p>
-            <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-              {episode.storyScenicImages.map((img, idx) => (
-                <div key={`scene-${idx}`} className='reader-image rounded-sm overflow-hidden border border-crimson/25 bg-black/20'>
-                  <img
-                    src={img}
-                    alt={`Scenery ${idx + 1}`}
-                    className='w-full h-72 object-cover object-center hover:scale-[1.02] transition-transform duration-500'
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className='mb-14'>
-          <div className='mb-6 flex items-center gap-4'>
-            <div className='h-px flex-1 bg-border/20' />
-            <span className='font-mono text-[10px] tracking-[0.35em] text-crimson uppercase'>Reading Mode</span>
-            <div className='h-px flex-1 bg-border/20' />
-          </div>
-
-          {readerBlocks.length > 0 ? (
-            <div className='space-y-5'>
-              {readerBlocks.map((block, idx) => {
-                if (block.type === 'divider') {
-                  return (
-                    <div key={`divider-${idx}`} className='reader-block py-2 flex justify-center'>
-                      <div className='w-12 h-px bg-border/20' />
+        {!isVideoMode && (
+          <>
+            {episode.images && episode.images.length > 0 && (
+              <div className='mb-12'>
+                <p className='font-mono text-[10px] tracking-[0.3em] text-ash/40 uppercase mb-4 text-center'>Episode Images</p>
+                <div className={episode.images.length === 1 ? 'grid grid-cols-1 max-w-3xl mx-auto gap-4' : 'grid grid-cols-1 md:grid-cols-2 gap-4'}>
+                  {episode.images.map((img, idx) => (
+                    <div key={idx} className='reader-image rounded-sm overflow-hidden border border-border/30 bg-black/20'>
+                      <img
+                        src={img}
+                        alt={`${episode.title} ${idx + 1}`}
+                        className='w-full h-72 md:h-96 object-cover object-center hover:scale-[1.02] transition-transform duration-500'
+                      />
                     </div>
-                  );
-                }
+                  ))}
+                </div>
+              </div>
+            )}
 
-                if (block.type === 'dialogue') {
-                  return (
-                    <div key={`dialogue-${idx}`} className='reader-block md:px-8'>
-                      <div className='border-l-2 border-crimson/40 bg-crimson/5 px-4 py-3 md:px-5 md:py-4'>
-                        {block.speaker && (
-                          <p className='font-mono text-[10px] tracking-[0.28em] text-crimson uppercase mb-2 text-center'>
-                            {block.speaker}
-                          </p>
-                        )}
-                        <p className='font-body text-ash/95 text-lg leading-relaxed italic text-center'>
-                          {block.text}
-                        </p>
+            {episode.storyCharacterImages && episode.storyCharacterImages.length > 0 && (
+              <div className='mb-12'>
+                <p className='font-mono text-[10px] tracking-[0.3em] text-crimson uppercase mb-4 text-center'>Character Pictures</p>
+                <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
+                  {episode.storyCharacterImages.map((img, idx) => (
+                    <div key={`char-${idx}`} className='reader-image rounded-sm overflow-hidden border border-crimson/25 bg-black/20'>
+                      <img
+                        src={img}
+                        alt={`Character ${idx + 1}`}
+                        className='w-full h-56 object-cover object-center hover:scale-[1.02] transition-transform duration-500'
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {episode.storyScenicImages && episode.storyScenicImages.length > 0 && (
+              <div className='mb-12'>
+                <p className='font-mono text-[10px] tracking-[0.3em] text-crimson uppercase mb-4 text-center'>Scenic Pictures</p>
+                <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                  {episode.storyScenicImages.map((img, idx) => (
+                    <div key={`scene-${idx}`} className='reader-image rounded-sm overflow-hidden border border-crimson/25 bg-black/20'>
+                      <img
+                        src={img}
+                        alt={`Scenery ${idx + 1}`}
+                        className='w-full h-72 object-cover object-center hover:scale-[1.02] transition-transform duration-500'
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* MOTION COMIC VERTICAL SCROLL FEED (FULL BLEED - COVER ALL SPACE) */}
+        {(episode.contentType === 'video' || motionComicVideos.length > 0) ? (
+          <div className='mb-16 -mx-6 md:-mx-10 w-[calc(100%+3rem)] md:w-full md:mx-auto md:max-w-4xl'>
+            {motionComicVideos.length === 0 ? (
+              <div className='p-12 text-center rounded border border-crimson/30 bg-crimson/5 text-ash/60 font-mono text-xs uppercase mx-6 md:mx-0'>
+                No motion comic video uploaded for this episode yet.
+              </div>
+            ) : (
+              <div className='space-y-4'>
+                {motionComicVideos.length > 1 && (
+                  <div className='flex items-center justify-center gap-2 overflow-x-auto py-2.5 px-4 bg-black/60 border border-crimson/40 rounded-lg backdrop-blur-md mx-6 md:mx-0 shadow-lg'>
+                    <span className='font-mono text-[10px] tracking-widest text-ash/60 uppercase mr-2 shrink-0 font-bold'>
+                      EPISODE PARTS ({motionComicVideos.length}):
+                    </span>
+                    {motionComicVideos.map((item, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => {
+                          const el = document.getElementById(`video-part-${item.partNumber}`);
+                          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }}
+                        className='px-3 py-1 rounded bg-crimson/20 border border-crimson/50 hover:bg-crimson/40 text-crimson font-mono text-xs uppercase tracking-wider transition-colors shrink-0 font-semibold'
+                      >
+                        {item.title}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className='flex flex-col items-center gap-0 space-y-0 w-full rounded-none md:rounded-lg overflow-hidden border-0 md:border md:border-crimson/30 shadow-[0_0_35px_rgba(0,0,0,0.9)] p-0 m-0'>
+                  {motionComicVideos.map((vItem, idx) => (
+                    <MotionComicVideoCard
+                      key={`${vItem.url}-${idx}`}
+                      url={vItem.url}
+                      index={idx}
+                      title={vItem.title}
+                      partNumber={vItem.partNumber}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* TEXT / READING MODE (Only shown when creator chooses Text Story format) */
+          <div className='mb-14'>
+            <div className='mb-6 flex items-center gap-4'>
+              <div className='h-px flex-1 bg-border/20' />
+              <span className='font-mono text-[10px] tracking-[0.35em] text-crimson uppercase'>Reading Mode</span>
+              <div className='h-px flex-1 bg-border/20' />
+            </div>
+
+            {readerBlocks.length > 0 ? (
+              <div className='space-y-5'>
+                {readerBlocks.map((block, idx) => {
+                  if (block.type === 'divider') {
+                    return (
+                      <div key={`divider-${idx}`} className='reader-block py-2 flex justify-center'>
+                        <div className='w-12 h-px bg-border/20' />
                       </div>
-                    </div>
-                  );
-                }
+                    );
+                  }
 
-                return (
-                  <p key={`narration-${idx}`} className='reader-block font-body text-ash/80 leading-loose text-[1.06rem] md:text-[1.14rem] text-center'>
-                    {block.text}
-                  </p>
-                );
-              })}
-            </div>
-          ) : (
-            <p className='reader-block font-body text-ash/80 leading-loose text-[1.06rem] md:text-[1.14rem] text-center'>
-              {episode.content}
-            </p>
-          )}
-        </div>
+                  if (block.type === 'dialogue') {
+                    return (
+                      <div key={`dialogue-${idx}`} className='reader-block md:px-8'>
+                        <div className='border-l-2 border-crimson/40 bg-crimson/5 px-4 py-3 md:px-5 md:py-4'>
+                          {block.speaker && (
+                            <p className='font-mono text-[10px] tracking-[0.28em] text-crimson uppercase mb-2 text-center'>
+                              {block.speaker}
+                            </p>
+                          )}
+                          <p className='font-body text-ash/95 text-lg leading-relaxed italic text-center'>
+                            {block.text}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <p key={`narration-${idx}`} className='reader-block font-body text-ash/80 leading-loose text-[1.06rem] md:text-[1.14rem] text-center'>
+                      {block.text}
+                    </p>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className='reader-block font-body text-ash/80 leading-loose text-[1.06rem] md:text-[1.14rem] text-center'>
+                {episode.content}
+              </p>
+            )}
+          </div>
+        )}
 
         <div className='flex flex-col md:flex-row justify-center gap-4 border-t border-border/20 pt-8'>
           {navigation.previous ? (

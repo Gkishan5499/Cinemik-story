@@ -4,11 +4,14 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { storiesAPI, episodesAPI, commentsAPI } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
+import { formatDate } from '@/lib/date';
 
 interface Story {
   _id: string;
   title: string;
   description: string;
+  contentType?: 'text' | 'video';
+  videoUrl?: string;
   coverImage?: string;
   category?: string;
   status?: 'draft' | 'published';
@@ -25,6 +28,8 @@ interface Episode {
   episodeNumber: number;
   title: string;
   content: string;
+  contentType?: 'text' | 'video';
+  videoUrl?: string;
   images?: string[];
   createdAt: string;
 }
@@ -154,11 +159,6 @@ export default function StoryDetailPage() {
   const firstEpisode = episodes.length > 0 ? episodes[0] : null;
   const latestEpisode = episodes.length > 0 ? episodes[episodes.length - 1] : null;
 
-  const formatDate = (value?: string) => {
-    if (!value) return '—';
-    return new Date(value).toLocaleDateString();
-  };
-
   const shortDescription = (() => {
     const text = (story.description || '').trim();
     if (!text) return '';
@@ -225,6 +225,7 @@ export default function StoryDetailPage() {
                     .map((ep) => {
                       const thumb = ep.images?.[0] || story.coverImage || '';
                       const active = latestEpisode?._id === ep._id;
+                      const isVideo = ep.contentType === 'video' || Boolean(ep.videoUrl);
 
                       return (
                         <Link
@@ -234,16 +235,28 @@ export default function StoryDetailPage() {
                             active ? 'bg-crimson/20 text-ash border-crimson/55' : 'bg-white/3 border-crimson/20 hover:border-crimson/45'
                           }`}
                         >
-                          <div className="h-14 md:h-16 w-14 md:w-16 overflow-hidden bg-white/10">
+                          <div className="h-14 md:h-16 w-14 md:w-16 overflow-hidden bg-white/10 relative">
                             {thumb ? (
                               <img src={thumb} alt={ep.title} className="w-full h-full object-cover" />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-[10px] text-ash/40">IMG</div>
                             )}
+                            {isVideo && (
+                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                <span className="text-sm">🎬</span>
+                              </div>
+                            )}
                           </div>
 
                           <div className="min-w-0">
-                            <p className="text-sm md:text-base font-medium truncate">Episode {ep.episodeNumber}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm md:text-base font-medium truncate">Episode {ep.episodeNumber}</p>
+                              {isVideo && (
+                                <span className="px-1.5 py-0.5 text-[9px] font-mono bg-crimson/30 text-crimson border border-crimson/50 rounded uppercase shrink-0">
+                                  🎬 {(ep as any).videoSections && (ep as any).videoSections.length > 1 ? `${(ep as any).videoSections.length} PARTS` : 'VIDEO'}
+                                </span>
+                              )}
+                            </div>
                             <p className={`text-xs md:text-sm truncate ${active ? 'text-ash/85' : 'text-ash/55'}`}>{ep.title}</p>
                           </div>
 

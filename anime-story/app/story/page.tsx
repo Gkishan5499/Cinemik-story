@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { storiesAPI } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
+import { formatDate } from '@/lib/date';
 
 interface Story {
   _id: string;
@@ -85,7 +86,7 @@ export default function StoriesPage() {
                           BY {story.creator?.username?.toUpperCase() || 'UNKNOWN'}
                         </span>
                         <p className="font-mono text-xs tracking-[0.2em] text-ash/40 uppercase mt-2">
-                          {new Date(story.createdAt).toLocaleDateString()}
+                          {formatDate(story.createdAt)}
                         </p>
                       </div>
 

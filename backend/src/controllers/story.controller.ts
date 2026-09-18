@@ -139,7 +139,7 @@ export const getStory = async (req: Request, res: Response) => {
 // POST /api/stories — creator
 export const createStory = async (req: AuthRequest, res: Response) => {
   try {
-    const { title, description, category, tags, status, creatorId, backgroundMusic } = req.body;
+    const { title, description, category, tags, status, creatorId, backgroundMusic, contentType, videoUrl } = req.body;
     const files = (req as any).files as Record<string, any[]> | undefined;
     const coverImage =
       (req as any).file?.path ||
@@ -149,6 +149,7 @@ export const createStory = async (req: AuthRequest, res: Response) => {
       files?.backgroundMusic?.[0]?.path ||
       backgroundMusic ||
       "";
+    const uploadedVideoUrl = files?.video?.[0]?.path || videoUrl || "";
     const characterImages = (files?.characterImages || []).map((file: any) => file.path);
     const scenicImages = (files?.scenicImages || []).map((file: any) => file.path);
 
@@ -170,6 +171,8 @@ export const createStory = async (req: AuthRequest, res: Response) => {
     const story = await Story.create({
       title,
       description,
+      contentType: contentType || (uploadedVideoUrl ? "video" : "text"),
+      videoUrl: uploadedVideoUrl,
       coverImage,
       backgroundMusic: backgroundMusicUrl,
       characterImages,
@@ -203,15 +206,18 @@ export const updateStory = async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const { title, description, category, tags, status, backgroundMusic } = req.body;
+    const { title, description, category, tags, status, backgroundMusic, contentType, videoUrl } = req.body;
     const files = (req as any).files as Record<string, any[]> | undefined;
     const coverImage = (req as any).file?.path || files?.coverImage?.[0]?.path;
     const backgroundMusicUrl = files?.backgroundMusic?.[0]?.path || backgroundMusic;
+    const uploadedVideoUrl = files?.video?.[0]?.path || videoUrl;
     const characterImages = (files?.characterImages || []).map((file: any) => file.path);
     const scenicImages = (files?.scenicImages || []).map((file: any) => file.path);
 
     if (title) story.title = title;
     if (description) story.description = description;
+    if (contentType) story.contentType = contentType;
+    if (uploadedVideoUrl !== undefined) story.videoUrl = uploadedVideoUrl;
     if (category) story.category = category;
     if (tags) story.tags = parseTags(tags);
     if (status) story.status = status;
@@ -364,8 +370,62 @@ export const createEpisode = async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const { title, content = "", episodeNumber } = req.body;
-    const images = ((req as any).files || []).map((file: any) => file.path);
+    const { title, content = "", episodeNumber, contentType, videoUrl, videoSections } = req.body;
+    const reqFiles = (req as any).files;
+    let images: string[] = [];
+    let uploadedVideoUrl = videoUrl || "";
+
+    const uploadedVideoFiles = (reqFiles && typeof reqFiles === "object" && !Array.isArray(reqFiles)) ? (reqFiles.video || []) : [];
+
+    if (Array.isArray(reqFiles)) {
+      images = reqFiles.map((file: any) => file.path);
+    } else if (reqFiles && typeof reqFiles === "object") {
+      images = (reqFiles.images || []).map((file: any) => file.path);
+      if (uploadedVideoFiles.length > 0) {
+        uploadedVideoUrl = uploadedVideoFiles[0].path;
+      }
+    }
+
+    // Parse video sections
+    let parsedSections: Array<{ title?: string; videoUrl: string; sectionNumber: number }> = [];
+    if (videoSections) {
+      try {
+        const raw = typeof videoSections === "string" ? JSON.parse(videoSections) : videoSections;
+        if (Array.isArray(raw)) {
+          let fileIdx = 0;
+          parsedSections = raw.map((sec: any, idx: number) => {
+            let vUrl = sec.videoUrl || "";
+            if ((!vUrl || vUrl.startsWith("file_placeholder")) && uploadedVideoFiles[fileIdx]) {
+              vUrl = uploadedVideoFiles[fileIdx].path;
+              fileIdx++;
+            }
+            return {
+              title: sec.title || `Part ${idx + 1}`,
+              videoUrl: vUrl,
+              sectionNumber: idx + 1,
+            };
+          }).filter((sec) => sec.videoUrl);
+        }
+      } catch (e) {
+        parsedSections = [];
+      }
+    }
+
+    if (parsedSections.length === 0) {
+      if (uploadedVideoFiles.length > 0) {
+        parsedSections = uploadedVideoFiles.map((file: any, idx: number) => ({
+          title: `Part ${idx + 1}`,
+          videoUrl: file.path,
+          sectionNumber: idx + 1,
+        }));
+      } else if (uploadedVideoUrl) {
+        parsedSections = [{
+          title: "Part 1",
+          videoUrl: uploadedVideoUrl,
+          sectionNumber: 1,
+        }];
+      }
+    }
 
     if (!title || !episodeNumber) {
       res.status(400).json({ message: "Episode title and episode number are required" });
@@ -382,10 +442,15 @@ export const createEpisode = async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    const finalContentType = contentType || (parsedSections.length > 0 || uploadedVideoUrl ? "video" : "text");
+
     const episode = await Episode.create({
       story: story._id,
       title,
       content,
+      contentType: finalContentType,
+      videoUrl: parsedSections[0]?.videoUrl || uploadedVideoUrl,
+      videoSections: parsedSections,
       images,
       episodeNumber: Number(episodeNumber),
     });
@@ -421,11 +486,55 @@ export const updateEpisode = async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const { title, content, episodeNumber } = req.body;
-    const images = ((req as any).files || []).map((file: any) => file.path);
+    const { title, content, episodeNumber, contentType, videoUrl, videoSections } = req.body;
+    const reqFiles = (req as any).files;
+    let images: string[] = [];
+    let uploadedVideoUrl: string | undefined = videoUrl;
+    const uploadedVideoFiles = (reqFiles && typeof reqFiles === "object" && !Array.isArray(reqFiles)) ? (reqFiles.video || []) : [];
+
+    if (Array.isArray(reqFiles)) {
+      images = reqFiles.map((file: any) => file.path);
+    } else if (reqFiles && typeof reqFiles === "object") {
+      images = (reqFiles.images || []).map((file: any) => file.path);
+      if (uploadedVideoFiles.length > 0) {
+        uploadedVideoUrl = uploadedVideoFiles[0].path;
+      }
+    }
+
+    // Parse video sections if passed
+    if (videoSections !== undefined) {
+      let parsedSections: Array<{ title?: string; videoUrl: string; sectionNumber: number }> = [];
+      try {
+        const raw = typeof videoSections === "string" ? JSON.parse(videoSections) : videoSections;
+        if (Array.isArray(raw)) {
+          let fileIdx = 0;
+          parsedSections = raw.map((sec: any, idx: number) => {
+            let vUrl = sec.videoUrl || "";
+            if ((!vUrl || vUrl.startsWith("file_placeholder")) && uploadedVideoFiles[fileIdx]) {
+              vUrl = uploadedVideoFiles[fileIdx].path;
+              fileIdx++;
+            }
+            return {
+              title: sec.title || `Part ${idx + 1}`,
+              videoUrl: vUrl,
+              sectionNumber: idx + 1,
+            };
+          }).filter((sec) => sec.videoUrl);
+        }
+      } catch (e) {
+        parsedSections = [];
+      }
+      episode.videoSections = parsedSections;
+      if (parsedSections.length > 0) {
+        episode.videoUrl = parsedSections[0].videoUrl;
+      }
+    } else if (uploadedVideoUrl !== undefined) {
+      episode.videoUrl = uploadedVideoUrl;
+    }
 
     if (title) episode.title = title;
     if (content !== undefined) episode.content = content;
+    if (contentType) episode.contentType = contentType;
 
     if (episodeNumber) {
       const duplicateEpisodeNumber = await Episode.findOne({

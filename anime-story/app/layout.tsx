@@ -1,39 +1,27 @@
 import type { Metadata } from "next";
-import { Cinzel, Bebas_Neue, Noto_Serif_JP, Space_Mono } from "next/font/google";
-import Script from "next/script";
+import { Bricolage_Grotesque, Manrope } from "next/font/google";
 import "./globals.css";
 import LenisProvider from "@/components/LenisProvider";
 import CustomCursor from "@/components/ui/CustomCursor";
 import Navbar from "@/components/ui/Navbar";
+import ClientInit from "@/components/ClientInit";
 import { AuthProvider } from "@/lib/AuthContext";
 
-const fontDisplay = Cinzel({
-  weight: ["400", "700"],
+const fontBricolage = Bricolage_Grotesque({
+  weight: ["400", "600", "700", "800"],
   subsets: ["latin"],
-  variable: "--font-display",
+  variable: "--font-bricolage",
 });
 
-const fontHero = Bebas_Neue({
-  weight: "400",
+const fontManrope = Manrope({
+  weight: ["400", "500", "600", "700"],
   subsets: ["latin"],
-  variable: "--font-hero",
-});
-
-const fontBody = Noto_Serif_JP({
-  weight: ["400", "700"],
-  subsets: ["latin"],
-  variable: "--font-body",
-});
-
-const fontMono = Space_Mono({
-  weight: ["400", "700"],
-  subsets: ["latin"],
-  variable: "--font-mono",
+  variable: "--font-manrope",
 });
 
 export const metadata: Metadata = {
-  title: "Anime Story | The World Awakens",
-  description: "A cinematic, scroll-driven anime story website",
+  title: "CINEMIKS | READ THE REEL",
+  description: "CINEMIKS is a cinematic storytelling platform powered by motion, cinematic visuals, atmospheric audio, and vertical scrolling. READ THE REEL.",
 };
 
 export default function RootLayout({
@@ -44,22 +32,11 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${fontDisplay.variable} ${fontHero.variable} ${fontBody.variable} ${fontMono.variable} antialiased`}
+      suppressHydrationWarning
+      className={`${fontBricolage.variable} ${fontManrope.variable} antialiased`}
     >
-      <head>
-        <Script id="performance-polyfill" strategy="beforeInteractive">
-          {`(function(){
-  if (typeof window === 'undefined') return;
-  var perf = window.performance;
-  if (!perf) return;
-  if (typeof perf.mark !== 'function') perf.mark = function(){};
-  if (typeof perf.measure !== 'function') perf.measure = function(){};
-  if (typeof perf.clearMarks !== 'function') perf.clearMarks = function(){};
-  if (typeof perf.clearMeasures !== 'function') perf.clearMeasures = function(){};
-})();`}
-        </Script>
-      </head>
-      <body>
+      <body suppressHydrationWarning className="bg-[#0A0A0A] text-[#F5F5F7]">
+        <ClientInit />
         <AuthProvider>
           <LenisProvider>
             <CustomCursor />
