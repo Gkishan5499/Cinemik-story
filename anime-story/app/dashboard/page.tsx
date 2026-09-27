@@ -1,8 +1,8 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { useRouter } from 'next/navigation';
-import { storiesAPI, episodesAPI } from '@/lib/api';
+import { storiesAPI } from '@/lib/api';
 import Link from 'next/link';
 import ImageUpload from '@/components/ui/ImageUpload';
 import CategorySelector from '@/components/ui/CategorySelector';
@@ -52,24 +52,45 @@ export default function CreatorDashboard() {
     }
   }, [user, authLoading, router]);
 
-  // Load stories
-  useEffect(() => {
-    if (user?.role === 'creator') {
-      loadStories();
-    }
-  }, [user]);
-
-  const loadStories = async () => {
+  const loadStories = useCallback(async () => {
     try {
-      setLoading(true);
       const res = await storiesAPI.myStories();
       setStories(res.stories || []);
-    } catch (err) {
+    } catch {
       setError('Failed to load stories');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  // Load stories
+  useEffect(() => {
+    let ignore = false;
+    const fetchStories = async () => {
+      try {
+        const res = await storiesAPI.myStories();
+        if (!ignore) {
+          setStories(res.stories || []);
+        }
+      } catch {
+        if (!ignore) {
+          setError('Failed to load stories');
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    };
+
+    if (user?.role === 'creator') {
+      fetchStories();
+    }
+
+    return () => {
+      ignore = true;
+    };
+  }, [user]);
 
   const handleCreateStory = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,7 +132,7 @@ export default function CreatorDashboard() {
       setShowCreateForm(false);
       await loadStories();
     } catch (err) {
-      setError('Failed to create story');
+      setError(err instanceof Error ? err.message : 'Failed to create story');
     } finally {
       setCreating(false);
     }
@@ -123,7 +144,7 @@ export default function CreatorDashboard() {
       await storiesAPI.delete(storyId);
       await loadStories();
     } catch (err) {
-      setError('Failed to delete story');
+      setError(err instanceof Error ? err.message : 'Failed to delete story');
     }
   };
 
@@ -133,7 +154,7 @@ export default function CreatorDashboard() {
       await storiesAPI.togglePublish(storyId);
       await loadStories();
     } catch (err) {
-      setError('Failed to toggle publish status');
+      setError(err instanceof Error ? err.message : 'Failed to toggle publish status');
     }
   };
 
@@ -346,7 +367,7 @@ export default function CreatorDashboard() {
                     <h3 className="font-display text-2xl text-ash mb-2">{story.title}</h3>
                     <p className="font-mono text-xs text-ash/60 uppercase line-clamp-2">{story.description}</p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <span className={`px-3 py-2 text-xs font-mono uppercase rounded border ${
                       story.status === 'published'
                         ? 'bg-green-500/20 border-green-500/50 text-green-500'
@@ -355,18 +376,26 @@ export default function CreatorDashboard() {
                       {story.status === 'published' ? 'PUBLISHED' : 'DRAFT'}
                     </span>
                     <Link
+                      href={`/dashboard/stories/${story._id}?newEpisode=true`}
+                      className="px-3 py-2 bg-green-500/20 border border-green-500/50 text-green-400 hover:bg-green-500/30 text-xs font-mono uppercase font-bold transition-colors"
+                    >
+                      + ADD EPISODE
+                    </Link>
+                    <Link
                       href={`/dashboard/stories/${story._id}`}
                       className="px-3 py-2 bg-crimson/20 border border-crimson/50 text-crimson hover:bg-crimson/30 text-xs font-mono uppercase"
                     >
                       EDIT
                     </Link>
                     <button
+                      type="button"
                       onClick={() => handleTogglePublish(story._id)}
                       className="px-3 py-2 bg-blue-500/20 border border-blue-500/50 text-blue-300 hover:bg-blue-500/30 text-xs font-mono uppercase"
                     >
                       {story.status === 'published' ? 'UNPUBLISH' : 'PUBLISH'}
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleDeleteStory(story._id)}
                       className="px-3 py-2 bg-red-500/20 border border-red-500/50 text-red-500 hover:bg-red-500/30 text-xs font-mono uppercase"
                     >

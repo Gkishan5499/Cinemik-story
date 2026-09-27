@@ -27,6 +27,19 @@ interface EpisodeVideoSection {
   sectionNumber?: number;
 }
 
+interface RawEpisode {
+  _id: string;
+  title: string;
+  content?: string;
+  contentType?: 'text' | 'video';
+  videoUrl?: string;
+  videoSections?: EpisodeVideoSection[];
+  episodeNumber: number;
+  images?: string[];
+  createdAt?: string;
+  story?: string;
+}
+
 interface EpisodeItem {
   _id: string;
   title: string;
@@ -64,9 +77,48 @@ function MotionComicVideoCard({ url, index, title, partNumber }: MotionComicVide
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(true);
 
-  const togglePlay = () => {
+  // Normalize Cloudinary video URL so iOS Safari and mobile browsers can play it (h.264 mp4 format)
+  const normalizedUrl = (() => {
+    if (!url) return '';
+    if (url.includes('cloudinary.com') && url.includes('/video/upload/')) {
+      if (url.endsWith('.webm') || !url.includes('.')) {
+        return url.replace('/video/upload/', '/video/upload/f_mp4,vc_h264/').replace(/\.webm$/, '.mp4');
+      }
+    }
+    return url;
+  })();
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    // Critical for iOS Safari & Android mobile browsers:
+    video.muted = true;
+    video.defaultMuted = true;
+    video.setAttribute('playsinline', 'true');
+    video.setAttribute('webkit-playsinline', 'true');
+
+    const tryPlay = () => {
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => setIsPlaying(true))
+          .catch(() => {
+            // Autoplay blocked by mobile browser policy until user taps
+            setIsPlaying(false);
+          });
+      }
+    };
+
+    tryPlay();
+  }, [normalizedUrl]);
+
+  const togglePlay = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (!videoRef.current) return;
     if (videoRef.current.paused) {
+      videoRef.current.muted = true;
+      videoRef.current.defaultMuted = true;
       void videoRef.current.play().catch(() => {});
       setIsPlaying(true);
     } else {
@@ -79,22 +131,14 @@ function MotionComicVideoCard({ url, index, title, partNumber }: MotionComicVide
     <div
       id={`video-part-${partNumber || index + 1}`}
       onClick={togglePlay}
-      className={`relative w-full overflow-hidden cursor-pointer group p-0 m-0 leading-none block ${
+      className={`relative w-full overflow-hidden cursor-pointer group p-0 m-0 leading-none block select-none ${
         index > 0 ? '-mt-[2px]' : ''
       }`}
       style={{ isolation: 'isolate' }}
     >
-      {/* Part Header Badge Overlay */}
-      {title && (
-        <div className='absolute top-3 left-3 z-10 bg-black/80 backdrop-blur-md border border-crimson/50 px-3 py-1 rounded text-crimson font-mono text-[11px] tracking-wider uppercase shadow-lg flex items-center gap-2 pointer-events-none'>
-          <span className='w-2 h-2 rounded-full bg-crimson animate-pulse' />
-          <span>{title}</span>
-        </div>
-      )}
-
       <video
         ref={videoRef}
-        src={url}
+        src={normalizedUrl}
         autoPlay
         loop
         muted
@@ -103,19 +147,22 @@ function MotionComicVideoCard({ url, index, title, partNumber }: MotionComicVide
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
         onContextMenu={(e) => e.preventDefault()}
-        className='w-full h-auto object-cover mx-auto pointer-events-none block p-0 m-0 border-0 outline-none -mb-[1px]'
+        className='w-full h-auto object-cover mx-auto block p-0 m-0 border-0 outline-none -mb-[1px]'
         style={{ display: 'block', verticalAlign: 'bottom' }}
       />
 
       {/* Play Overlay Indicator if Paused - Toggles opacity to prevent DOM removal errors */}
       <div
-        className={`absolute inset-0 bg-black/40 flex items-center justify-center pointer-events-none transition-opacity duration-300 ${
+        className={`absolute inset-0 bg-black/50 flex flex-col items-center justify-center pointer-events-none transition-opacity duration-300 ${
           isPlaying ? 'opacity-0' : 'opacity-100'
         }`}
       >
-        <div className='w-16 h-16 rounded-full bg-black/70 border border-crimson/50 text-crimson flex items-center justify-center text-2xl shadow-lg'>
+        <div className='w-16 h-16 rounded-full bg-black/80 border-2 border-crimson text-crimson flex items-center justify-center text-2xl shadow-[0_0_20px_rgba(230,57,70,0.6)] mb-2'>
           <span>▶</span>
         </div>
+        <span className='font-mono text-xs uppercase tracking-widest text-white/90 bg-black/70 px-3 py-1 rounded border border-white/20'>
+          Tap to Play Video
+        </span>
       </div>
     </div>
   );
@@ -141,6 +188,47 @@ export default function EpisodePage() {
         setLoading(true);
         setError('');
 
+        // Step 1: Attempt direct, fast single-query lookup by episodeId
+        try {
+          const directRes = await episodesAPI.getById(episodeId);
+          if (directRes?.episode) {
+            const ep = directRes.episode as RawEpisode;
+            const s = directRes.story as StoryItem | undefined;
+            const sibs: EpisodeItem[] = ((directRes.episodes || []) as RawEpisode[]).map((e: RawEpisode) => ({
+              ...e,
+              content: e.content || '',
+              createdAt: e.createdAt || '',
+              storyId: s?._id || e.story || '',
+              storyTitle: s?.title || '',
+              storyDescription: s?.description || '',
+              storyCover: s?.coverImage || '',
+              storyBackgroundMusic: s?.backgroundMusic || '',
+              storyCharacterImages: s?.characterImages || [],
+              storyScenicImages: s?.scenicImages || [],
+              creatorName: s?.creator?.username || '',
+            }));
+            const current: EpisodeItem = {
+              ...ep,
+              content: ep.content || '',
+              createdAt: ep.createdAt || '',
+              storyId: s?._id || ep.story || '',
+              storyTitle: s?.title || '',
+              storyDescription: s?.description || '',
+              storyCover: s?.coverImage || '',
+              storyBackgroundMusic: s?.backgroundMusic || '',
+              storyCharacterImages: s?.characterImages || [],
+              storyScenicImages: s?.scenicImages || [],
+              creatorName: s?.creator?.username || '',
+            };
+            setEpisode(current);
+            setEpisodesInStory(sibs);
+            return;
+          }
+        } catch {
+          // Fall back to scanning stories
+        }
+
+        // Step 2: Fallback scan across stories
         const storiesRes = await storiesAPI.listPublic();
         const stories: StoryItem[] = storiesRes.stories || [];
 
@@ -149,11 +237,13 @@ export default function EpisodePage() {
 
         for (const story of stories) {
           const epRes = await episodesAPI.list(story._id);
-          const eps = (epRes.episodes || []) as any[];
+          const eps = (epRes.episodes || []) as RawEpisode[];
 
-          const normalized = eps
-            .map((ep) => ({
+          const normalized: EpisodeItem[] = eps
+            .map((ep: RawEpisode) => ({
               ...ep,
+              content: ep.content || '',
+              createdAt: ep.createdAt || '',
               storyId: story._id,
               storyTitle: story.title,
               storyDescription: story.description,
@@ -288,7 +378,7 @@ export default function EpisodePage() {
     });
 
     return blocks;
-  }, [episode?.content]);
+  }, [episode]);
 
   useGSAP(
     () => {

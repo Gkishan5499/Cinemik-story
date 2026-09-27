@@ -5,6 +5,7 @@ import { AuthRequest } from "../middleware/auth.middleware";
 import Story from "../models/Story";
 import Episode from "../models/Episode";
 import Comment from "../models/Comment";
+import { sendPasswordResetEmail } from "../utils/mailer";
 
 const generateToken = (id: string): string => {
   return jwt.sign({ id }, process.env.JWT_SECRET!, { expiresIn: "30d" });
@@ -324,3 +325,102 @@ export const deleteUserByAdmin = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: error.message || "Server error" });
   }
 };
+
+// POST /api/auth/forgot-password
+export const forgotPassword = async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      res.status(400).json({ message: "Email is required" });
+      return;
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    if (!user) {
+      res.status(404).json({
+        message: "No registered account found with that email address.",
+      });
+      return;
+    }
+
+    // Generate clean 6-digit reset code
+    const resetToken = Math.floor(100000 + Math.random() * 900000).toString();
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpires = new Date(Date.now() + 3600000); // 1 hour
+    await user.save();
+
+    const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
+    const resetLink = `${clientUrl}/auth/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
+
+    console.log(`[PASSWORD RESET] Verification Code for ${user.email} (${user.username}): ${resetToken}`);
+    console.log(`[PASSWORD RESET] Direct Link: ${resetLink}`);
+
+    // Send email with reset link via SMTP
+    try {
+      const emailResult = await sendPasswordResetEmail({
+        to: user.email,
+        username: user.username,
+        resetToken,
+        resetLink,
+      });
+
+      if (emailResult.success) {
+        res.json({
+          message: `Password reset link sent to ${user.email}! Please check your Gmail/inbox.`,
+          email: user.email,
+        });
+      } else {
+        // SMTP credentials not configured
+        res.status(500).json({
+          message: `SMTP credentials not configured in backend/.env. Please configure SMTP_USER and SMTP_PASS.`,
+          email: user.email,
+        });
+      }
+    } catch (smtpErr: any) {
+      console.error(`[SMTP ERROR] Could not send reset email:`, smtpErr.message);
+      res.status(500).json({
+        message: `Failed to send email via SMTP (${smtpErr.message}). Please check SMTP settings in backend/.env.`,
+        email: user.email,
+      });
+    }
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || "Server error" });
+  }
+};
+
+// POST /api/auth/reset-password
+export const resetPassword = async (req: Request, res: Response) => {
+  try {
+    const { email, token, newPassword } = req.body;
+    if (!email || !token || !newPassword) {
+      res.status(400).json({ message: "Email, reset code, and new password are required" });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      res.status(400).json({ message: "Password must be at least 6 characters" });
+      return;
+    }
+
+    const user = await User.findOne({
+      email: email.toLowerCase().trim(),
+      resetPasswordToken: token.trim(),
+      resetPasswordExpires: { $gt: new Date() },
+    });
+
+    if (!user) {
+      res.status(400).json({ message: "Invalid or expired reset code. Please request a new one." });
+      return;
+    }
+
+    user.password = newPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    res.json({ message: "Password reset successfully! You can now log in with your new password." });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || "Server error" });
+  }
+};
+

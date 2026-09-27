@@ -2,6 +2,7 @@
 
 import { useState, FormEvent } from 'react';
 import Link from 'next/link';
+import { contactAPI } from '@/lib/api';
 
 const FAQ_ITEMS = [
   {
@@ -33,6 +34,7 @@ export default function ContactPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -49,15 +51,25 @@ export default function ContactPage() {
     setTimeout(() => setCopiedPhone(false), 2500);
   };
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.email || !formData.message) return;
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
+    setErrorMessage(null);
+
+    try {
+      await contactAPI.send(formData);
       setSubmitted(true);
-    }, 1000);
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Failed to send message via SMTP. Please check your network or try again.';
+      setErrorMessage(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -237,7 +249,7 @@ export default function ContactPage() {
                   MESSAGE SENT SUCCESSFULLY!
                 </h3>
                 <p className="font-manrope text-sm text-white/70 max-w-md mx-auto leading-relaxed mb-6">
-                  Thank you, <span className="text-[#FFC857] font-semibold">{formData.name}</span>. We have received your message regarding "{formData.subject}" and will respond to <span className="text-[#2596be]">{formData.email}</span> shortly.
+                  Thank you, <span className="text-[#FFC857] font-semibold">{formData.name}</span>. We have received your message regarding &ldquo;{formData.subject}&rdquo; and will respond to <span className="text-[#2596be]">{formData.email}</span> shortly.
                 </p>
                 <button
                   type="button"
@@ -252,6 +264,11 @@ export default function ContactPage() {
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-6">
+                {errorMessage && (
+                  <div className="p-4 rounded-lg bg-crimson/20 border border-crimson/50 text-crimson text-xs font-manrope leading-relaxed">
+                    {errorMessage}
+                  </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Name Input */}
                   <div>

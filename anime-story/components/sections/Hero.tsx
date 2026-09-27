@@ -134,10 +134,10 @@ export default function Hero() {
         {/* Platform Stats Row */}
         <div ref={statsRef} className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-12 mt-16 pt-10 border-t border-white/10 w-full max-w-4xl">
           {[
-            { value: '12M+', label: 'Passionate Readers' },
-            { value: '500+', label: 'Original Creators' },
-            { value: '2.5K+', label: 'Immersive Episodes' },
-            { value: '98%', label: 'Entertainment Rating' },
+            { value: '10K+', label: 'Readers' },
+            { value: '50+', label: 'Creators' },
+            { value: '50+', label: 'Stories' },
+            { value: '98%', label: 'Immersive Experience' },
           ].map((stat, i) => (
             <div key={i} className="text-center">
               <div className="font-bricolage text-3xl sm:text-4xl md:text-5xl font-extrabold text-[#2596be] leading-none">

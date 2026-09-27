@@ -198,7 +198,7 @@ export const updateStory = async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const isOwner = story.creator.toString() === req.user._id.toString();
+    const isOwner = story.creator ? story.creator.toString() === req.user._id.toString() : false;
     const isAdmin = req.user.role === "admin";
 
     if (!isOwner && !isAdmin) {
@@ -242,7 +242,7 @@ export const deleteStory = async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const isOwner = story.creator.toString() === req.user._id.toString();
+    const isOwner = story.creator ? story.creator.toString() === req.user._id.toString() : false;
     const isAdmin = req.user.role === "admin";
 
     if (!isOwner && !isAdmin) {
@@ -294,7 +294,7 @@ export const togglePublishStory = async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const isOwner = story.creator.toString() === req.user._id.toString();
+    const isOwner = story.creator ? story.creator.toString() === req.user._id.toString() : false;
     const isAdmin = req.user.role === "admin";
 
     if (!isOwner && !isAdmin) {
@@ -338,6 +338,36 @@ export const getAllStoriesForAdmin = async (req: AuthRequest, res: Response) => 
   }
 };
 
+// GET /api/stories/episodes/:episodeId or /api/stories/:storyId/episodes/:episodeId
+export const getEpisodeById = async (req: Request, res: Response) => {
+  try {
+    const rawId = req.params.episodeId || req.params.id;
+    const episodeId = String(Array.isArray(rawId) ? rawId[0] : rawId);
+    if (!episodeId || !mongoose.Types.ObjectId.isValid(episodeId)) {
+      res.status(400).json({ message: "Invalid episode ID" });
+      return;
+    }
+
+    const episode = await Episode.findById(episodeId).lean();
+    if (!episode) {
+      res.status(404).json({ message: "Episode not found" });
+      return;
+    }
+
+    const story = await Story.findById(episode.story)
+      .populate("creator", "username avatar")
+      .lean();
+
+    const siblingEpisodes = await Episode.find({ story: episode.story })
+      .sort({ episodeNumber: 1 })
+      .lean();
+
+    res.json({ episode, story, episodes: siblingEpisodes });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // GET /api/stories/:storyId/episodes
 export const getEpisodesByStory = async (req: Request, res: Response) => {
   try {
@@ -363,7 +393,7 @@ export const createEpisode = async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const isOwner = story.creator.toString() === req.user._id.toString();
+    const isOwner = story.creator ? story.creator.toString() === req.user._id.toString() : false;
     const isAdmin = req.user.role === "admin";
     if (!isOwner && !isAdmin) {
       res.status(403).json({ message: "Not authorized to add episodes to this story" });
@@ -473,7 +503,7 @@ export const updateEpisode = async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const isOwner = story.creator.toString() === req.user._id.toString();
+    const isOwner = story.creator ? story.creator.toString() === req.user._id.toString() : false;
     const isAdmin = req.user.role === "admin";
     if (!isOwner && !isAdmin) {
       res.status(403).json({ message: "Not authorized to edit episodes in this story" });
@@ -567,7 +597,7 @@ export const deleteEpisode = async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const isOwner = story.creator.toString() === req.user._id.toString();
+    const isOwner = story.creator ? story.creator.toString() === req.user._id.toString() : false;
     const isAdmin = req.user.role === "admin";
     if (!isOwner && !isAdmin) {
       res.status(403).json({ message: "Not authorized to delete episodes in this story" });

@@ -15,6 +15,8 @@ export interface IUser extends Document {
   city?: string;
   country?: string;
   interests?: string[];
+  resetPasswordToken?: string;
+  resetPasswordExpires?: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
@@ -74,6 +76,14 @@ const UserSchema = new Schema<IUser>(
     interests: {
       type: [String],
       default: [],
+    },
+    resetPasswordToken: {
+      type: String,
+      default: undefined,
+    },
+    resetPasswordExpires: {
+      type: Date,
+      default: undefined,
     },
   },
   { timestamps: true }

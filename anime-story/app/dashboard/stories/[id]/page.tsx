@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { useRouter, useParams } from 'next/navigation';
 import { storiesAPI, episodesAPI } from '@/lib/api';
@@ -96,25 +96,10 @@ export default function StoryEditorPage() {
   const [editVideoSections, setEditVideoSections] = useState<SectionInput[]>([]);
   const [editEpisodeImages, setEditEpisodeImages] = useState<File[]>([]);
 
-  useEffect(() => {
-    if (!authLoading && (!user || user.role !== 'creator')) {
-      router.push('/auth/login');
-    }
-  }, [authLoading, user, router]);
-
-  useEffect(() => {
-    if (storyId && user?.role === 'creator') {
-      void loadData();
-    }
-  }, [storyId, user?.role]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!storyId) return;
 
     try {
-      setPageLoading(true);
-      setError('');
-
       const [storyRes, episodesRes] = await Promise.all([
         storiesAPI.getDetail(storyId),
         episodesAPI.list(storyId),
@@ -135,11 +120,62 @@ export default function StoryEditorPage() {
         ...prev,
         episodeNumber: Math.max(1, nextEpisodes.length + 1),
       }));
+
+      if (typeof window !== 'undefined' && window.location.search.includes('newEpisode=true')) {
+        setShowCreateEpisode(true);
+      }
     } catch (err) {
       setError(err instanceof Error ? `Failed to load story details: ${err.message}` : 'Failed to load story details');
     } finally {
       setPageLoading(false);
     }
+  }, [storyId]);
+
+  useEffect(() => {
+    if (!authLoading && (!user || user.role !== 'creator')) {
+      router.push('/auth/login');
+    }
+  }, [authLoading, user, router]);
+
+  useEffect(() => {
+    if (storyId && user?.role === 'creator') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      void loadData();
+    }
+  }, [storyId, user?.role, loadData]);
+
+  const handleMultipleVideosSelect = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    isEdit: boolean
+  ) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    if (isEdit) {
+      setEditVideoSections((prev) => {
+        const existing = prev.filter((p) => p.file || p.videoUrl.trim());
+        const startIdx = existing.length;
+        const newParts = files.map((file, i) => ({
+          title: file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') || `Part ${startIdx + i + 1}`,
+          videoUrl: '',
+          file,
+        }));
+        return [...existing, ...newParts];
+      });
+    } else {
+      setNewVideoSections((prev) => {
+        const existing = prev.filter((p) => p.file || p.videoUrl.trim());
+        const startIdx = existing.length;
+        const newParts = files.map((file, i) => ({
+          title: file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') || `Part ${startIdx + i + 1}`,
+          videoUrl: '',
+          file,
+        }));
+        return [...existing, ...newParts];
+      });
+    }
+
+    e.target.value = '';
   };
 
   const handleUpdateStory = async (e: React.FormEvent) => {
@@ -177,8 +213,8 @@ export default function StoryEditorPage() {
       }));
       setStoryVideoFile(null);
       setNewBackgroundMusic(null);
-    } catch {
-      setError('Failed to update story');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to update story');
     } finally {
       setSavingStory(false);
     }
@@ -191,8 +227,8 @@ export default function StoryEditorPage() {
       setError('');
       const res = await storiesAPI.togglePublish(storyId);
       setStory(res.story);
-    } catch (err) {
-      setError('Failed to toggle publish status');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to toggle publish status');
     } finally {
       setTogglingPublish(false);
     }
@@ -234,8 +270,8 @@ export default function StoryEditorPage() {
       setNewVideoSections([{ title: 'Part 1', videoUrl: '', file: null }]);
       setNewEpisode({ ...initialEpisodeForm, episodeNumber: episodes.length + 2 });
       await loadData();
-    } catch {
-      setError('Failed to create episode');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create episode');
     } finally {
       setCreatingEpisode(false);
     }
@@ -307,8 +343,8 @@ export default function StoryEditorPage() {
       await episodesAPI.update(storyId, editingEpisodeId, formData);
       cancelEditEpisode();
       await loadData();
-    } catch {
-      setError('Failed to update episode');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to update episode');
     } finally {
       setUpdatingEpisode(false);
     }
@@ -322,8 +358,8 @@ export default function StoryEditorPage() {
       setError('');
       await episodesAPI.delete(storyId, episodeId);
       await loadData();
-    } catch {
-      setError('Failed to delete episode');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to delete episode');
     }
   };
 
@@ -592,24 +628,42 @@ export default function StoryEditorPage() {
               </div>
             </div>
 
-            {newEpisode.contentType === 'video' && (
+            {newEpisode.contentType === 'video' ? (
               <div className='p-4 rounded border border-red-500/40 bg-red-500/10 space-y-4'>
-                <div className='flex items-center justify-between'>
-                  <p className='font-mono text-xs text-red-300 font-bold uppercase flex items-center gap-2'>
-                    <span>🎬</span> MULTI-PART MOTION COMIC VIDEOS (PART 1, PART 2...)
-                  </p>
-                  <button
-                    type='button'
-                    onClick={() =>
-                      setNewVideoSections((prev) => [
-                        ...prev,
-                        { title: `Part ${prev.length + 1}`, videoUrl: '', file: null },
-                      ])
-                    }
-                    className='px-3 py-1 bg-red-500/20 border border-red-500/50 text-red-300 text-xs font-mono uppercase hover:bg-red-500/30 rounded'
-                  >
-                    + ADD PART
-                  </button>
+                <div className='flex flex-wrap items-center justify-between gap-2 border-b border-red-500/20 pb-3'>
+                  <div>
+                    <p className='font-mono text-xs text-red-300 font-bold uppercase flex items-center gap-2'>
+                      <span>🎬</span> MULTI-PART MOTION COMIC VIDEOS (PART 1, PART 2...)
+                    </p>
+                    <p className='text-[11px] text-white/60 font-mono mt-0.5'>
+                      Select multiple videos at once from your device, or add/edit parts individually.
+                    </p>
+                  </div>
+                  <div className='flex items-center gap-2'>
+                    {/* Batch multi-video file picker */}
+                    <label className='px-3 py-1.5 bg-red-600 hover:bg-red-500 active:scale-95 text-white text-xs font-mono uppercase font-bold rounded cursor-pointer transition-all flex items-center gap-1.5 shadow'>
+                      <input
+                        type='file'
+                        multiple
+                        accept='video/*,.mp4,.webm,.mov,.mkv,.avi,.m4v'
+                        onChange={(e) => handleMultipleVideosSelect(e, false)}
+                        className='sr-only'
+                      />
+                      <span>📁 Select Multiple Videos</span>
+                    </label>
+                    <button
+                      type='button'
+                      onClick={() =>
+                        setNewVideoSections((prev) => [
+                          ...prev,
+                          { title: `Part ${prev.length + 1}`, videoUrl: '', file: null },
+                        ])
+                      }
+                      className='px-3 py-1.5 bg-red-500/20 border border-red-500/50 text-red-300 text-xs font-mono uppercase hover:bg-red-500/30 rounded'
+                    >
+                      + Add Single Part
+                    </button>
+                  </div>
                 </div>
 
                 <div className='space-y-3'>
@@ -652,7 +706,7 @@ export default function StoryEditorPage() {
                             }
                             className='w-full rounded border border-white/20 bg-black/50 px-2 py-1 text-xs text-white file:mr-2 file:py-0.5 file:px-2 file:border-0 file:bg-red-500/20 file:text-red-300 font-mono'
                           />
-                          {sec.file && <p className='text-[10px] text-green-400 mt-1'>Selected: {sec.file.name}</p>}
+                          {sec.file && <p className='text-[10px] text-green-400 mt-1 font-mono'>Selected: {sec.file.name}</p>}
                         </div>
 
                         <div>
@@ -674,25 +728,51 @@ export default function StoryEditorPage() {
                   ))}
                 </div>
               </div>
+            ) : (
+              /* Normal Comic Section */
+              <div className='p-4 rounded border border-blue-500/40 bg-blue-500/10 space-y-3'>
+                <div className='flex items-center gap-2'>
+                  <span className='text-xl'>📖</span>
+                  <div>
+                    <p className='font-mono text-xs text-blue-300 font-bold uppercase'>
+                      NORMAL COMIC / MANGA / WEBTOON CHAPTER PANELS
+                    </p>
+                    <p className='text-[11px] text-white/60 font-mono mt-0.5'>
+                      Upload image panels, pages, or vertical strips (multi-select up to 25MB each).
+                    </p>
+                  </div>
+                </div>
+                <ImageUpload
+                  onImagesSelected={setEpisodeImages}
+                  multiple={true}
+                  maxSize={25}
+                  preview={true}
+                  label='Select comic pages / manga panels (PNG, JPG, WEBP)'
+                />
+              </div>
             )}
 
             <div>
-              <label htmlFor='new-episode-content' className='block mb-2 text-sm text-white/80'>
-                {newEpisode.contentType === 'video' ? 'Episode Summary / Description (Optional)' : 'Content / Script'}
+              <label htmlFor='new-episode-content' className='block mb-2 text-sm text-white/80 font-mono text-xs uppercase'>
+                {newEpisode.contentType === 'video' ? 'Episode Summary / Description (Optional)' : 'Content / Dialogue / Script (Optional if comic images uploaded)'}
               </label>
               <textarea
                 id='new-episode-content'
                 value={newEpisode.content}
                 onChange={(e) => setNewEpisode((prev) => ({ ...prev, content: e.target.value }))}
-                className='w-full min-h-32 rounded border border-white/20 bg-black/50 px-3 py-2 outline-none focus:border-red-400'
-                required={newEpisode.contentType !== 'video'}
+                placeholder={newEpisode.contentType === 'video' ? 'Brief summary of this episode...' : 'Enter story text, dialogue, or script...'}
+                className='w-full min-h-28 rounded border border-white/20 bg-black/50 px-3 py-2 outline-none focus:border-red-400 text-sm font-mono'
               />
             </div>
 
-            <div>
-              <p className='mb-2 text-sm text-white/80'>Episode Images (Optional / Panels)</p>
-              <ImageUpload onImagesSelected={setEpisodeImages} multiple={true} preview={true} />
-            </div>
+            {newEpisode.contentType === 'video' && (
+              <div>
+                <p className='mb-2 text-sm text-white/80 font-mono text-xs tracking-wider uppercase'>
+                  Episode Images / Artwork (Optional)
+                </p>
+                <ImageUpload onImagesSelected={setEpisodeImages} multiple={true} preview={true} label='Upload companion artwork / screenshots' />
+              </div>
+            )}
 
             <div className='flex gap-3'>
               <button
@@ -887,22 +967,39 @@ export default function StoryEditorPage() {
 
                       {editEpisodeData.contentType === 'video' && (
                         <div className='p-4 rounded border border-red-500/40 bg-red-500/10 space-y-4'>
-                          <div className='flex items-center justify-between'>
-                            <p className='font-mono text-xs text-red-300 font-bold uppercase flex items-center gap-2'>
-                              <span>🎬</span> EDIT MULTI-PART MOTION COMIC VIDEOS (PART 1, PART 2...)
-                            </p>
-                            <button
-                              type='button'
-                              onClick={() =>
-                                setEditVideoSections((prev) => [
-                                  ...prev,
-                                  { title: `Part ${prev.length + 1}`, videoUrl: '', file: null },
-                                ])
-                              }
-                              className='px-3 py-1 bg-red-500/20 border border-red-500/50 text-red-300 text-xs font-mono uppercase hover:bg-red-500/30 rounded'
-                            >
-                              + ADD PART
-                            </button>
+                          <div className='flex flex-wrap items-center justify-between gap-2 border-b border-red-500/20 pb-3'>
+                            <div>
+                              <p className='font-mono text-xs text-red-300 font-bold uppercase flex items-center gap-2'>
+                                <span>🎬</span> EDIT MULTI-PART MOTION COMIC VIDEOS (PART 1, PART 2...)
+                              </p>
+                              <p className='text-[11px] text-white/60 font-mono mt-0.5'>
+                                Select multiple videos at once to append new parts, or manage individual parts below.
+                              </p>
+                            </div>
+                            <div className='flex items-center gap-2'>
+                              <label className='px-3 py-1.5 bg-red-600 hover:bg-red-500 active:scale-95 text-white text-xs font-mono uppercase font-bold rounded cursor-pointer transition-all flex items-center gap-1.5 shadow'>
+                                <input
+                                  type='file'
+                                  multiple
+                                  accept='video/*,.mp4,.webm,.mov,.mkv,.avi,.m4v'
+                                  onChange={(e) => handleMultipleVideosSelect(e, true)}
+                                  className='sr-only'
+                                />
+                                <span>📁 Select Multiple Videos</span>
+                              </label>
+                              <button
+                                type='button'
+                                onClick={() =>
+                                  setEditVideoSections((prev) => [
+                                    ...prev,
+                                    { title: `Part ${prev.length + 1}`, videoUrl: '', file: null },
+                                  ])
+                                }
+                                className='px-3 py-1.5 bg-red-500/20 border border-red-500/50 text-red-300 text-xs font-mono uppercase hover:bg-red-500/30 rounded'
+                              >
+                                + Add Single Part
+                              </button>
+                            </div>
                           </div>
 
                           <div className='space-y-3'>

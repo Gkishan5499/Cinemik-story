@@ -36,19 +36,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Load user on mount
   useEffect(() => {
+    let isMounted = true;
     const token = localStorage.getItem('token');
     if (token) {
       authAPI
         .me()
-        .then((res) => setUser(res.user))
-        .catch(() => {
-          localStorage.removeItem('token');
-          setUser(null);
+        .then((res) => {
+          if (isMounted && res?.user) {
+            setUser(res.user);
+          }
         })
-        .finally(() => setLoading(false));
+        .catch((err: unknown) => {
+          const msg = (err instanceof Error ? err.message : String(err || '')).toLowerCase();
+          // Only wipe token if token is definitively invalid
+          if (msg.includes('token') || msg.includes('unauthorized') || msg.includes('jwt') || msg.includes('forbidden')) {
+            localStorage.removeItem('token');
+            if (isMounted) setUser(null);
+          }
+        })
+        .finally(() => {
+          if (isMounted) setLoading(false);
+        });
     } else {
-      setLoading(false);
+      queueMicrotask(() => {
+        if (isMounted) setLoading(false);
+      });
     }
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const login = async (email: string, password: string) => {
@@ -57,8 +74,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await authAPI.login({ email, password });
       localStorage.setItem('token', res.token);
       setUser(res.user);
-    } catch (err: any) {
-      const msg = err.statusText || err.message || 'Login failed';
+    } catch (err: unknown) {
+      const errObj = err as { statusText?: string; message?: string } | null;
+      const msg = errObj?.statusText || errObj?.message || 'Login failed';
       setError(msg);
       throw err;
     }
@@ -70,8 +88,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await authAPI.signup({ email, password, username });
       localStorage.setItem('token', res.token);
       setUser(res.user);
-    } catch (err: any) {
-      const msg = err.statusText || err.message || 'Signup failed';
+    } catch (err: unknown) {
+      const errObj = err as { statusText?: string; message?: string } | null;
+      const msg = errObj?.statusText || errObj?.message || 'Signup failed';
       setError(msg);
       throw err;
     }
@@ -88,8 +107,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const res = await authAPI.becomeCreator();
       setUser(res.user);
-    } catch (err: any) {
-      const msg = err.statusText || err.message || 'Failed to become creator';
+    } catch (err: unknown) {
+      const errObj = err as { statusText?: string; message?: string } | null;
+      const msg = errObj?.statusText || errObj?.message || 'Failed to become creator';
       setError(msg);
       throw err;
     }

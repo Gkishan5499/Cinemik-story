@@ -16,6 +16,7 @@ import {
 	getAllStoriesForAdmin,
 	getCategories,
 	getCommentsByStory,
+	getEpisodeById,
 	getEpisodesByStory,
 	getMyStories,
 	getStories,
@@ -44,6 +45,10 @@ router.patch(
 	approveCommentByAdmin
 );
 
+// Episode direct lookups (must be before /:id)
+router.get("/episodes/:episodeId", getEpisodeById);
+router.get("/:storyId/episodes/:episodeId", getEpisodeById);
+
 // Public stories
 router.get("/", getStories);
 
@@ -57,8 +62,8 @@ router.post(
 		{ name: "coverImage", maxCount: 1 },
 		{ name: "backgroundMusic", maxCount: 1 },
 		{ name: "video", maxCount: 1 },
-		{ name: "characterImages", maxCount: 12 },
-		{ name: "scenicImages", maxCount: 12 },
+		{ name: "characterImages", maxCount: 25 },
+		{ name: "scenicImages", maxCount: 25 },
 	]),
 	createStory
 );
@@ -70,8 +75,8 @@ router.put(
 		{ name: "coverImage", maxCount: 1 },
 		{ name: "backgroundMusic", maxCount: 1 },
 		{ name: "video", maxCount: 1 },
-		{ name: "characterImages", maxCount: 12 },
-		{ name: "scenicImages", maxCount: 12 },
+		{ name: "characterImages", maxCount: 25 },
+		{ name: "scenicImages", maxCount: 25 },
 	]),
 	updateStory
 );
@@ -92,8 +97,8 @@ router.post(
 	authenticate,
 	requireCreator,
 	upload.fields([
-		{ name: "images", maxCount: 10 },
-		{ name: "video", maxCount: 20 },
+		{ name: "images", maxCount: 50 },
+		{ name: "video", maxCount: 30 },
 	]),
 	createEpisode
 );
@@ -102,8 +107,8 @@ router.put(
 	authenticate,
 	requireCreator,
 	upload.fields([
-		{ name: "images", maxCount: 10 },
-		{ name: "video", maxCount: 20 },
+		{ name: "images", maxCount: 50 },
+		{ name: "video", maxCount: 30 },
 	]),
 	updateEpisode
 );
