@@ -39,7 +39,7 @@ export default function Navbar() {
         ref={navRef}
         className={`fixed top-0 left-0 right-0 flex justify-between items-center px-6 md:px-12 will-change-transform transition-all duration-300 ${
           scrolled
-            ? 'py-2.5 bg-[#0A0A0A]/95 backdrop-blur-2xl border-b border-[#2596be]/25 shadow-xl shadow-black/50'
+            ? 'py-2.5 bg-[#0A0A0A]/95 backdrop-blur-2xl border-b border-[#2596be]/25'
             : 'py-3.5 md:py-4 bg-[#0A0A0A]/80 backdrop-blur-md border-b border-white/10'
         }`}
         style={{ zIndex: 100, opacity: 1, visibility: 'visible' }}

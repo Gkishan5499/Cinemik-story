@@ -88,6 +88,7 @@ export default function Episodes() {
               <video
                 src={featured.video}
                 autoPlay loop muted playsInline
+                preload="metadata"
                 className="w-full h-full object-cover opacity-50 group-hover:opacity-70 group-hover:scale-105 transition-all duration-700 origin-center"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-ink/90 via-ink/30 to-transparent" />
@@ -141,6 +142,7 @@ export default function Episodes() {
                   <video 
                     src={ep.video} 
                     autoPlay loop muted playsInline
+                    preload="none"
                     className="w-full h-full object-cover opacity-50 group-hover:opacity-80 group-hover:scale-105 transition-all duration-500 origin-center"
                   />
                   {/* Play overlay */}

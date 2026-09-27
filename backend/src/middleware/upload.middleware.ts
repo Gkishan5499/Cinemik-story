@@ -44,6 +44,16 @@ class RobustCloudinaryStorage implements multer.StorageEngine {
             resource_type: "video",
             folder: "anime-stories/video",
             chunk_size: 6000000, // 6MB chunks for large files
+            eager: [
+              {
+                format: "mp4",
+                video_codec: "h264",
+                quality: "auto",
+                width: 1080,
+                crop: "limit",
+              },
+            ],
+            eager_async: true,
           });
         } else if (isAudio) {
           result = await cloudinary.uploader.upload_large(tempFilePath, {

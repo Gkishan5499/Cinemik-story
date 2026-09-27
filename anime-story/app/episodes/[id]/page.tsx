@@ -73,97 +73,165 @@ interface MotionComicVideoCardProps {
   partNumber?: number;
 }
 
-function MotionComicVideoCard({ url, index, title, partNumber }: MotionComicVideoCardProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [isPlaying, setIsPlaying] = useState(true);
-
-  // Normalize Cloudinary video URL so iOS Safari and mobile browsers can play it (h.264 mp4 format)
-  const normalizedUrl = (() => {
-    if (!url) return '';
-    if (url.includes('cloudinary.com') && url.includes('/video/upload/')) {
-      if (url.endsWith('.webm') || !url.includes('.')) {
-        return url.replace('/video/upload/', '/video/upload/f_mp4,vc_h264/').replace(/\.webm$/, '.mp4');
-      }
+// Normalize Cloudinary video URL so iOS Safari and mobile browsers stream clean, high-quality H.264 MP4
+function getOptimizedVideoUrl(rawUrl: string): string {
+  if (!rawUrl) return '';
+  if (rawUrl.includes('cloudinary.com') && rawUrl.includes('/video/upload/')) {
+    // If it already has transformation parameters, don't duplicate
+    if (
+      rawUrl.includes('/video/upload/f_') ||
+      rawUrl.includes('/video/upload/vc_') ||
+      rawUrl.includes('/video/upload/q_')
+    ) {
+      return rawUrl;
     }
-    return url;
-  })();
+    // For non-MP4 formats (.webm, .mov, etc.), transcode to H.264 MP4 with q_auto:best to prevent color banding/shadows
+    if (!rawUrl.endsWith('.mp4')) {
+      const transformed = rawUrl.replace(
+        '/video/upload/',
+        '/video/upload/f_mp4,vc_h264,q_auto:best,w_1080,c_limit/'
+      );
+      return transformed.replace(/\.(webm|mov|mkv|avi|m4v)$/i, '.mp4');
+    }
+    // If already MP4, keep original stream to avoid re-compression shadows
+    return rawUrl;
+  }
+  return rawUrl;
+}
 
+function MotionComicVideoCard({ url, index, title, partNumber }: MotionComicVideoCardProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isUserPaused, setIsUserPaused] = useState(false);
+  const [isNearView, setIsNearView] = useState(index === 0);
+
+  const optimizedUrl = useMemo(() => getOptimizedVideoUrl(url), [url]);
+
+  // Attempt autoplay immediately on mount or URL change
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    // Critical for iOS Safari & Android mobile browsers:
     video.muted = true;
     video.defaultMuted = true;
     video.setAttribute('playsinline', 'true');
     video.setAttribute('webkit-playsinline', 'true');
 
-    const tryPlay = () => {
-      const playPromise = video.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => setIsPlaying(true))
-          .catch(() => {
-            // Autoplay blocked by mobile browser policy until user taps
-            setIsPlaying(false);
-          });
-      }
-    };
+    if (!isUserPaused && video.paused) {
+      void video.play().catch(() => {});
+    }
+  }, [optimizedUrl, isUserPaused]);
 
-    tryPlay();
-  }, [normalizedUrl]);
+  // Viewport intersection observer:
+  // 1. Preload when within 350px
+  // 2. Auto-play when intersecting screen
+  // 3. Auto-pause when scrolled away
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const proximityObserver = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsNearView(true);
+        }
+      },
+      { rootMargin: '350px 0px' }
+    );
+
+    const playbackObserver = new IntersectionObserver(
+      ([entry]) => {
+        const video = videoRef.current;
+        if (!video) return;
+
+        if (entry.isIntersecting) {
+          if (!isUserPaused && video.paused) {
+            video.muted = true;
+            video.defaultMuted = true;
+            video.setAttribute('playsinline', 'true');
+            video.setAttribute('webkit-playsinline', 'true');
+            void video.play().catch(() => {});
+          }
+        } else {
+          if (!video.paused) {
+            video.pause();
+          }
+        }
+      },
+      { threshold: 0.05 }
+    );
+
+    proximityObserver.observe(container);
+    playbackObserver.observe(container);
+
+    return () => {
+      proximityObserver.disconnect();
+      playbackObserver.disconnect();
+    };
+  }, [optimizedUrl, isUserPaused]);
 
   const togglePlay = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!videoRef.current) return;
-    if (videoRef.current.paused) {
-      videoRef.current.muted = true;
-      videoRef.current.defaultMuted = true;
-      void videoRef.current.play().catch(() => {});
-      setIsPlaying(true);
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (video.paused) {
+      setIsUserPaused(false);
+      video.muted = true;
+      video.defaultMuted = true;
+      video.setAttribute('playsinline', 'true');
+      video.setAttribute('webkit-playsinline', 'true');
+      void video.play().catch(() => {});
     } else {
-      videoRef.current.pause();
-      setIsPlaying(false);
+      setIsUserPaused(true);
+      video.pause();
     }
   };
 
   return (
     <div
+      ref={containerRef}
       id={`video-part-${partNumber || index + 1}`}
       onClick={togglePlay}
-      className={`relative w-full overflow-hidden cursor-pointer group p-0 m-0 leading-none block select-none ${
+      className={`relative w-full overflow-hidden cursor-pointer group p-0 m-0 leading-none block select-none bg-transparent ${
         index > 0 ? '-mt-[2px]' : ''
       }`}
-      style={{ isolation: 'isolate' }}
+      style={{ isolation: 'isolate', boxShadow: 'none' }}
     >
       <video
         ref={videoRef}
-        src={normalizedUrl}
+        src={isNearView ? optimizedUrl : undefined}
         autoPlay
         loop
         muted
         playsInline
-        preload='auto'
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
+        preload={index === 0 ? 'auto' : 'metadata'}
+        onCanPlay={() => {
+          if (!isUserPaused && videoRef.current && videoRef.current.paused) {
+            void videoRef.current.play().catch(() => {});
+          }
+        }}
+        onLoadedData={() => {
+          if (!isUserPaused && videoRef.current && videoRef.current.paused) {
+            void videoRef.current.play().catch(() => {});
+          }
+        }}
         onContextMenu={(e) => e.preventDefault()}
         className='w-full h-auto object-cover mx-auto block p-0 m-0 border-0 outline-none -mb-[1px]'
-        style={{ display: 'block', verticalAlign: 'bottom' }}
+        style={{ display: 'block', verticalAlign: 'bottom', backgroundColor: 'transparent' }}
       />
 
-      {/* Play Overlay Indicator if Paused - Toggles opacity to prevent DOM removal errors */}
-      <div
-        className={`absolute inset-0 bg-black/50 flex flex-col items-center justify-center pointer-events-none transition-opacity duration-300 ${
-          isPlaying ? 'opacity-0' : 'opacity-100'
-        }`}
-      >
-        <div className='w-16 h-16 rounded-full bg-black/80 border-2 border-crimson text-crimson flex items-center justify-center text-2xl shadow-[0_0_20px_rgba(230,57,70,0.6)] mb-2'>
-          <span>▶</span>
+      {/* Play Overlay Indicator - ONLY shown when user manually paused */}
+      {isUserPaused && (
+        <div className='absolute inset-0 bg-black/45 flex flex-col items-center justify-center pointer-events-none transition-opacity duration-300 z-10'>
+          <div className='w-14 h-14 md:w-16 md:h-16 rounded-full bg-black/80 border-2 border-crimson text-crimson flex items-center justify-center text-xl md:text-2xl shadow-[0_0_25px_rgba(230,57,70,0.6)] mb-2 group-hover:scale-105 transition-transform'>
+            <span className='ml-1'>▶</span>
+          </div>
+          <span className='font-mono text-[11px] uppercase tracking-widest text-white/90 bg-black/75 px-3 py-1 rounded border border-white/20 shadow-md'>
+            Tap to Play Video
+          </span>
         </div>
-        <span className='font-mono text-xs uppercase tracking-widest text-white/90 bg-black/70 px-3 py-1 rounded border border-white/20'>
-          Tap to Play Video
-        </span>
-      </div>
+      )}
     </div>
   );
 }
@@ -282,36 +350,6 @@ export default function EpisodePage() {
     void loadEpisode();
   }, [episodeId]);
 
-  useEffect(() => {
-    const audio = audioRef.current;
-
-    if (!audio || !episode?.storyBackgroundMusic) return;
-
-    audio.volume = 0.6;
-
-    const playPromise = audio.play();
-    if (playPromise) {
-      void playPromise
-        .then(() => setIsMusicPlaying(true))
-        .catch(() => setIsMusicPlaying(false));
-    }
-
-    return () => {
-      audio.pause();
-      audio.currentTime = 0;
-      setIsMusicPlaying(false);
-    };
-  }, [episode?._id, episode?.storyBackgroundMusic]);
-
-  const navigation = useMemo(() => {
-    if (!episode) return { previous: null as EpisodeItem | null, next: null as EpisodeItem | null };
-    const index = episodesInStory.findIndex((ep) => ep._id === episode._id);
-    return {
-      previous: index > 0 ? episodesInStory[index - 1] : null,
-      next: index >= 0 && index < episodesInStory.length - 1 ? episodesInStory[index + 1] : null,
-    };
-  }, [episode, episodesInStory]);
-
   const motionComicVideos = useMemo(() => {
     if (!episode) return [];
     if (episode.videoSections && episode.videoSections.length > 0) {
@@ -334,6 +372,36 @@ export default function EpisodePage() {
     }
     return [];
   }, [episode]);
+
+  const navigation = useMemo(() => {
+    if (!episode) return { previous: null as EpisodeItem | null, next: null as EpisodeItem | null };
+    const index = episodesInStory.findIndex((ep) => ep._id === episode._id);
+    return {
+      previous: index > 0 ? episodesInStory[index - 1] : null,
+      next: index >= 0 && index < episodesInStory.length - 1 ? episodesInStory[index + 1] : null,
+    };
+  }, [episode, episodesInStory]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+
+    if (!audio || !episode?.storyBackgroundMusic) return;
+
+    audio.volume = 0.6;
+
+    const playPromise = audio.play();
+    if (playPromise) {
+      void playPromise
+        .then(() => setIsMusicPlaying(true))
+        .catch(() => setIsMusicPlaying(false));
+    }
+
+    return () => {
+      audio.pause();
+      audio.currentTime = 0;
+      setIsMusicPlaying(false);
+    };
+  }, [episode?._id, episode?.storyBackgroundMusic]);
 
   const readerBlocks = useMemo<ReaderBlock[]>(() => {
     if (!episode?.content) return [] as ReaderBlock[];
@@ -460,7 +528,7 @@ export default function EpisodePage() {
         await audioRef.current.play();
         setIsMusicPlaying(true);
       } catch {
-        setError('Your browser blocked autoplay. Use the audio controls to play music.');
+        setIsMusicPlaying(false);
       }
       return;
     }
@@ -623,7 +691,7 @@ export default function EpisodePage() {
                     ))}
                   </div>
                 )}
-                <div className='flex flex-col items-center gap-0 space-y-0 w-full rounded-none md:rounded-lg overflow-hidden border-0 md:border md:border-crimson/30 shadow-[0_0_35px_rgba(0,0,0,0.9)] p-0 m-0'>
+                <div className='flex flex-col items-center gap-0 space-y-0 w-full rounded-none md:rounded-lg overflow-hidden border-0 md:border md:border-crimson/30 p-0 m-0'>
                   {motionComicVideos.map((vItem, idx) => (
                     <MotionComicVideoCard
                       key={`${vItem.url}-${idx}`}
