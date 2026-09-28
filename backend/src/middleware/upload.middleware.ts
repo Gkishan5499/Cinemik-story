@@ -50,6 +50,7 @@ class RobustCloudinaryStorage implements multer.StorageEngine {
                 video_codec: "h264",
                 quality: "auto",
                 width: 1080,
+                height: 3840,
                 crop: "limit",
               },
             ],

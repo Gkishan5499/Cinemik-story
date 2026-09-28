@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { episodesAPI, storiesAPI } from '@/lib/api';
+import { getOptimizedVideoUrl } from '@/lib/media';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
@@ -73,57 +74,49 @@ interface MotionComicVideoCardProps {
   partNumber?: number;
 }
 
-// Normalize Cloudinary video URL so iOS Safari and mobile browsers stream clean, high-quality H.264 MP4
-function getOptimizedVideoUrl(rawUrl: string): string {
-  if (!rawUrl) return '';
-  if (rawUrl.includes('cloudinary.com') && rawUrl.includes('/video/upload/')) {
-    // If it already has transformation parameters, don't duplicate
-    if (
-      rawUrl.includes('/video/upload/f_') ||
-      rawUrl.includes('/video/upload/vc_') ||
-      rawUrl.includes('/video/upload/q_')
-    ) {
-      return rawUrl;
-    }
-    // For non-MP4 formats (.webm, .mov, etc.), transcode to H.264 MP4 with q_auto:best to prevent color banding/shadows
-    if (!rawUrl.endsWith('.mp4')) {
-      const transformed = rawUrl.replace(
-        '/video/upload/',
-        '/video/upload/f_mp4,vc_h264,q_auto:best,w_1080,c_limit/'
-      );
-      return transformed.replace(/\.(webm|mov|mkv|avi|m4v)$/i, '.mp4');
-    }
-    // If already MP4, keep original stream to avoid re-compression shadows
-    return rawUrl;
-  }
-  return rawUrl;
-}
-
 function MotionComicVideoCard({ url, index, title, partNumber }: MotionComicVideoCardProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isUserPaused, setIsUserPaused] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [isNearView, setIsNearView] = useState(index === 0);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
 
   const optimizedUrl = useMemo(() => getOptimizedVideoUrl(url), [url]);
 
-  // Attempt autoplay immediately on mount or URL change
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
+  // Ensure DOM attributes match iOS Safari strict requirements
+  const setupVideoAttributes = (video: HTMLVideoElement) => {
     video.muted = true;
     video.defaultMuted = true;
-    video.setAttribute('playsinline', 'true');
-    video.setAttribute('webkit-playsinline', 'true');
+    video.setAttribute('muted', '');
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', '');
+  };
 
-    if (!isUserPaused && video.paused) {
-      void video.play().catch(() => {});
+  // Attempt initial playback or reload when near view
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !isNearView) return;
+
+    setupVideoAttributes(video);
+
+    // Call load() so Safari primes the newly attached media stream
+    video.load();
+
+    if (!isUserPaused) {
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          if (process.env.NODE_ENV === 'development') {
+            console.warn(`[Video Part ${partNumber || index + 1}] Autoplay deferred by browser:`, err);
+          }
+        });
+      }
     }
-  }, [optimizedUrl, isUserPaused]);
+  }, [optimizedUrl, isNearView, isUserPaused, partNumber, index]);
 
   // Viewport intersection observer:
-  // 1. Preload when within 350px
+  // 1. Preload and attach stream when within 350px
   // 2. Auto-play when intersecting screen
   // 3. Auto-pause when scrolled away
   useEffect(() => {
@@ -146,11 +139,11 @@ function MotionComicVideoCard({ url, index, title, partNumber }: MotionComicVide
 
         if (entry.isIntersecting) {
           if (!isUserPaused && video.paused) {
-            video.muted = true;
-            video.defaultMuted = true;
-            video.setAttribute('playsinline', 'true');
-            video.setAttribute('webkit-playsinline', 'true');
-            void video.play().catch(() => {});
+            setupVideoAttributes(video);
+            const playPromise = video.play();
+            if (playPromise !== undefined) {
+              playPromise.catch(() => {});
+            }
           }
         } else {
           if (!video.paused) {
@@ -177,15 +170,89 @@ function MotionComicVideoCard({ url, index, title, partNumber }: MotionComicVide
 
     if (video.paused) {
       setIsUserPaused(false);
-      video.muted = true;
-      video.defaultMuted = true;
-      video.setAttribute('playsinline', 'true');
-      video.setAttribute('webkit-playsinline', 'true');
-      void video.play().catch(() => {});
+      setPlaybackError(null);
+      setupVideoAttributes(video);
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          if (process.env.NODE_ENV === 'development') {
+            console.error(`[Video Part ${partNumber || index + 1}] Play on tap failed:`, err);
+          }
+        });
+      }
     } else {
       setIsUserPaused(true);
       video.pause();
     }
+  };
+
+  const handlePlay = () => {
+    setIsPlaying(true);
+    setPlaybackError(null);
+  };
+
+  const handlePause = () => {
+    setIsPlaying(false);
+  };
+
+  const handleCanPlay = () => {
+    const video = videoRef.current;
+    if (!isUserPaused && video && video.paused) {
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {});
+      }
+    }
+  };
+
+  const handleLoadedMetadata = () => {
+    if (process.env.NODE_ENV === 'development') {
+      const v = videoRef.current;
+      console.log(`[Video Part ${partNumber || index + 1} Metadata]`, {
+        duration: v?.duration,
+        width: v?.videoWidth,
+        height: v?.videoHeight,
+      });
+    }
+  };
+
+  const handleLoadedData = () => {
+    const video = videoRef.current;
+    if (!isUserPaused && video && video.paused) {
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {});
+      }
+    }
+  };
+
+  const handleWaiting = () => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[Video Part ${partNumber || index + 1}] Buffering / waiting...`);
+    }
+  };
+
+  const handleStalled = () => {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(`[Video Part ${partNumber || index + 1}] Network download stalled.`);
+    }
+  };
+
+  const handleError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+    const video = e.currentTarget;
+    const mediaErr = video.error;
+    if (process.env.NODE_ENV === 'development') {
+      console.error(`[Video Part ${partNumber || index + 1} Error]`, {
+        code: mediaErr?.code,
+        message: mediaErr?.message,
+        src: video.currentSrc,
+      });
+    }
+    setPlaybackError(
+      mediaErr?.code === 4
+        ? 'Format not supported by browser.'
+        : 'Playback encountered an error. Tap to retry.'
+    );
   };
 
   return (
@@ -200,35 +267,42 @@ function MotionComicVideoCard({ url, index, title, partNumber }: MotionComicVide
     >
       <video
         ref={videoRef}
-        src={isNearView ? optimizedUrl : undefined}
+        playsInline
+        webkit-playsinline='true'
+        muted
         autoPlay
         loop
-        muted
-        playsInline
         preload={index === 0 ? 'auto' : 'metadata'}
-        onCanPlay={() => {
-          if (!isUserPaused && videoRef.current && videoRef.current.paused) {
-            void videoRef.current.play().catch(() => {});
-          }
-        }}
-        onLoadedData={() => {
-          if (!isUserPaused && videoRef.current && videoRef.current.paused) {
-            void videoRef.current.play().catch(() => {});
-          }
-        }}
+        onPlay={handlePlay}
+        onPause={handlePause}
+        onCanPlay={handleCanPlay}
+        onLoadedMetadata={handleLoadedMetadata}
+        onLoadedData={handleLoadedData}
+        onWaiting={handleWaiting}
+        onStalled={handleStalled}
+        onError={handleError}
         onContextMenu={(e) => e.preventDefault()}
         className='w-full h-auto object-cover mx-auto block p-0 m-0 border-0 outline-none -mb-[1px]'
         style={{ display: 'block', verticalAlign: 'bottom', backgroundColor: 'transparent' }}
-      />
+      >
+        {isNearView && optimizedUrl && (
+          <source src={optimizedUrl} type='video/mp4' />
+        )}
+        Your browser does not support the video tag.
+      </video>
 
-      {/* Play Overlay Indicator - ONLY shown when user manually paused */}
-      {isUserPaused && (
-        <div className='absolute inset-0 bg-black/45 flex flex-col items-center justify-center pointer-events-none transition-opacity duration-300 z-10'>
+      {/* Overlay Indicator - shown when paused by user or if playback is waiting/errored */}
+      {(isUserPaused || !isPlaying || playbackError) && (
+        <div
+          className={`absolute inset-0 bg-black/40 flex flex-col items-center justify-center transition-opacity duration-300 z-10 ${
+            !isUserPaused && !playbackError ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'
+          }`}
+        >
           <div className='w-14 h-14 md:w-16 md:h-16 rounded-full bg-black/80 border-2 border-crimson text-crimson flex items-center justify-center text-xl md:text-2xl shadow-[0_0_25px_rgba(230,57,70,0.6)] mb-2 group-hover:scale-105 transition-transform'>
             <span className='ml-1'>▶</span>
           </div>
           <span className='font-mono text-[11px] uppercase tracking-widest text-white/90 bg-black/75 px-3 py-1 rounded border border-white/20 shadow-md'>
-            Tap to Play Video
+            {playbackError ? playbackError : 'Tap to Play'}
           </span>
         </div>
       )}

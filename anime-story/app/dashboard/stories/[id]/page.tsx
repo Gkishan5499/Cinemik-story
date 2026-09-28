@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { useRouter, useParams } from 'next/navigation';
 import { storiesAPI, episodesAPI } from '@/lib/api';
+import { getOptimizedVideoUrl } from '@/lib/media';
 import Link from 'next/link';
 import ImageUpload from '@/components/ui/ImageUpload';
 
@@ -475,7 +476,10 @@ export default function StoryEditorPage() {
                 {storyData.videoUrl && (
                   <div className='mb-2'>
                     <p className='text-xs text-white/60 mb-1'>Current Video Preview:</p>
-                    <video src={storyData.videoUrl} controls className='w-full max-h-48 rounded bg-black' />
+                    <video controls playsInline preload='metadata' className='w-full max-h-48 rounded bg-black'>
+                      <source src={getOptimizedVideoUrl(storyData.videoUrl)} type='video/mp4' />
+                      Your browser does not support the video tag.
+                    </video>
                   </div>
                 )}
                 <div>
@@ -831,7 +835,10 @@ export default function StoryEditorPage() {
                                       <span className='text-[10px] text-white/50'>Part {secIdx + 1} of {episode.videoSections?.length || 1}</span>
                                     </div>
                                     {sec.videoUrl ? (
-                                      <video src={sec.videoUrl} controls className='w-full max-h-56 bg-black' />
+                                      <video controls playsInline preload='metadata' className='w-full max-h-56 bg-black'>
+                                        <source src={getOptimizedVideoUrl(sec.videoUrl)} type='video/mp4' />
+                                        Your browser does not support the video tag.
+                                      </video>
                                     ) : (
                                       <div className='p-3 text-xs text-white/40 font-mono'>No video file uploaded for this part</div>
                                     )}
@@ -843,7 +850,10 @@ export default function StoryEditorPage() {
                                 <div className='px-3 py-1 bg-red-500/20 text-xs font-mono text-red-200 border-b border-red-500/30'>
                                   🎬 Part 1
                                 </div>
-                                <video src={episode.videoUrl} controls className='w-full max-h-56' />
+                                <video controls playsInline preload='metadata' className='w-full max-h-56'>
+                                  <source src={getOptimizedVideoUrl(episode.videoUrl)} type='video/mp4' />
+                                  Your browser does not support the video tag.
+                                </video>
                               </div>
                             ) : null}
                           </div>
