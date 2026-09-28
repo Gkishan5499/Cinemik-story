@@ -20,6 +20,13 @@ export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const pathname = usePathname();
+  const [prevPathname, setPrevPathname] = useState(pathname);
+
+  // Close menus on route change (setState during render — no effect needed)
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname);
+    setMenuOpen(false);
+  }
   const isAdminRoute = pathname.startsWith('/admin');
 
   useEffect(() => {
@@ -28,8 +35,7 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // Close menu on route change
-  useEffect(() => { setMenuOpen(false); }, [pathname]);
+
 
   if (isAdminRoute) return null;
 
