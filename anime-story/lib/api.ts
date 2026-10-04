@@ -21,16 +21,29 @@ const handleResponse = async (r: Response) => {
   if (r.ok) {
     return r.json();
   }
-  if (r.status === 413) {
-    throw new Error(
-      'Upload failed: The files are too large for the server (HTTP 413 Request Entity Too Large). Nginx reverse proxy client_max_body_size or upload limits were exceeded.'
-    );
-  }
-  let errMsg = r.statusText || 'Request failed';
+
+  let errMsg = '';
   try {
     const data = await r.json();
-    errMsg = data.message || data.error || errMsg;
-  } catch {}
+    errMsg = data.error || data.message || '';
+  } catch {
+    try {
+      const text = await r.text();
+      if (text && !text.startsWith('<')) {
+        errMsg = text;
+      }
+    } catch {}
+  }
+
+  if (!errMsg) {
+    if (r.status === 413) {
+      errMsg =
+        'Upload failed: The file size exceeds the server limit (HTTP 413 Request Entity Too Large). Maximum upload limit is 100MB per file. (If running behind an Nginx reverse proxy, client_max_body_size must also be increased in nginx.conf).';
+    } else {
+      errMsg = r.statusText || `Request failed with status ${r.status}`;
+    }
+  }
+
   throw new Error(errMsg);
 };
 

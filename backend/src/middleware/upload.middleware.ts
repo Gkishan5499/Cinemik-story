@@ -5,6 +5,18 @@ import os from "os";
 import crypto from "crypto";
 import cloudinary from "../utils/cloudinary";
 
+const uploadLargeToCloudinary = (
+  filePath: string,
+  options: Record<string, any>
+): Promise<any> => {
+  return new Promise((resolve, reject) => {
+    cloudinary.uploader.upload_large(filePath, options, (err: any, result: any) => {
+      if (err) return reject(err);
+      resolve(result);
+    });
+  });
+};
+
 // Custom Multer Storage Engine that streams files to disk temporarily,
 // then uploads to Cloudinary with chunked upload_large for large videos/audios,
 // avoiding stream truncation and memory issues.
@@ -29,18 +41,60 @@ class RobustCloudinaryStorage implements multer.StorageEngine {
     });
 
     outStream.on("finish", async () => {
+      if ((file.stream as any)?.truncated || (file as any).truncated) {
+        // Stream was truncated by Multer limit (LIMIT_FILE_SIZE)
+        try {
+          if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
+        } catch {}
+        return;
+      }
+
       try {
+        const fieldname = (file.fieldname || "").toLowerCase();
         const mime = (file.mimetype || "").toLowerCase();
         const isVideo =
+          fieldname === "video" ||
+          fieldname === "videos" ||
           mime.startsWith("video/") ||
-          [".mp4", ".webm", ".mov", ".mkv", ".avi", ".m4v"].includes(ext);
+          [
+            ".mp4", ".webm", ".mov", ".mkv", ".avi", ".m4v",
+            ".flv", ".wmv", ".3gp", ".ogv", ".ts", ".mts",
+            ".m4p", ".mpg", ".mpeg", ".m2v", ".vob",
+          ].includes(ext);
         const isAudio =
+          fieldname === "backgroundmusic" ||
+          fieldname === "audio" ||
           mime.startsWith("audio/") ||
-          [".mp3", ".wav", ".ogg", ".m4a", ".aac"].includes(ext);
+          [".mp3", ".wav", ".ogg", ".m4a", ".aac", ".flac", ".wma"].includes(ext);
+
+        const stat = fs.existsSync(tempFilePath) ? fs.statSync(tempFilePath) : null;
+        const fileSize = stat ? stat.size : 0;
+
+        // Enforce Cloudinary Free Tier limits:
+        // - Images: 10MB (10,485,760 bytes)
+        // - Videos: 100MB (104,857,600 bytes)
+        // - Audio / Raw: 10MB (10,485,760 bytes)
+        if (!isVideo && !isAudio && fileSize > 10 * 1024 * 1024) {
+          cb(
+            new Error(
+              `Image "${file.originalname}" is ${(fileSize / (1024 * 1024)).toFixed(1)}MB. Cloudinary maximum allowed image size is 10MB. Please compress or resize the image.`
+            )
+          );
+          return;
+        }
+
+        if (isVideo && fileSize > 100 * 1024 * 1024) {
+          cb(
+            new Error(
+              `Video "${file.originalname}" is ${(fileSize / (1024 * 1024)).toFixed(1)}MB. Cloudinary maximum allowed video size is 100MB. Please compress or choose a file under 100MB.`
+            )
+          );
+          return;
+        }
 
         let result: any;
         if (isVideo) {
-          result = await cloudinary.uploader.upload_large(tempFilePath, {
+          result = await uploadLargeToCloudinary(tempFilePath, {
             resource_type: "video",
             folder: "anime-stories/video",
             chunk_size: 6000000, // 6MB chunks for large files
@@ -57,7 +111,7 @@ class RobustCloudinaryStorage implements multer.StorageEngine {
             eager_async: true,
           });
         } else if (isAudio) {
-          result = await cloudinary.uploader.upload_large(tempFilePath, {
+          result = await uploadLargeToCloudinary(tempFilePath, {
             resource_type: "auto",
             folder: "anime-stories/audio",
             chunk_size: 6000000,
@@ -69,8 +123,13 @@ class RobustCloudinaryStorage implements multer.StorageEngine {
           });
         }
 
+        const uploadedUrl = result?.secure_url || result?.url;
+        if (!uploadedUrl) {
+          throw new Error("Cloud storage did not return a valid media URL.");
+        }
+
         cb(null, {
-          path: result.secure_url || result.url,
+          path: uploadedUrl,
           filename: result.public_id,
           size: result.bytes,
         });
@@ -80,7 +139,11 @@ class RobustCloudinaryStorage implements multer.StorageEngine {
           uploadErr?.message ||
           uploadErr?.error?.message ||
           "Failed to upload media to cloud storage";
-        cb(new Error(errMsg));
+        const customErr = new Error(errMsg);
+        if (uploadErr?.http_code) {
+          (customErr as any).statusCode = uploadErr.http_code;
+        }
+        cb(customErr);
       } finally {
         try {
           if (fs.existsSync(tempFilePath)) {
@@ -111,7 +174,8 @@ const storage = new RobustCloudinaryStorage();
 const upload = multer({
   storage,
   limits: {
-    fileSize: 100 * 1024 * 1024, // 100MB max limit
+    fileSize: 100 * 1024 * 1024, // 100MB max per file (Cloudinary free tier limit)
+    fieldSize: 25 * 1024 * 1024, // 25MB max for metadata form fields
   },
 });
 

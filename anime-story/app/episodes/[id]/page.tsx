@@ -428,14 +428,14 @@ export default function EpisodePage() {
     if (!episode) return [];
     if (episode.videoSections && episode.videoSections.length > 0) {
       return episode.videoSections
-        .filter((s) => Boolean(s.videoUrl))
+        .filter((s) => Boolean(s.videoUrl) && !s.videoUrl.startsWith('file_placeholder'))
         .map((s, idx) => ({
           url: s.videoUrl,
           title: s.title || `Part ${idx + 1}`,
           partNumber: idx + 1,
         }));
     }
-    if (episode.videoUrl) {
+    if (episode.videoUrl && !episode.videoUrl.startsWith('file_placeholder')) {
       return [
         {
           url: episode.videoUrl,

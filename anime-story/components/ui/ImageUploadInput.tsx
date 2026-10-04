@@ -5,7 +5,7 @@ import Image from 'next/image';
 
 interface ImageUploadInputProps {
   label: string;
-  onImageUpload: (file: File, preview: string) => void;
+  onImageUpload: (file: File | null, preview: string) => void;
   currentImage?: string;
   aspectRatio?: 'square' | 'landscape' | 'portrait';
 }
@@ -23,9 +23,9 @@ export default function ImageUploadInput({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file size (max 25MB)
-    if (file.size > 25 * 1024 * 1024) {
-      alert('File size must be less than 25MB');
+    // Validate file size (max 10MB for Cloudinary)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size must be less than 10MB');
       return;
     }
 
@@ -106,7 +106,7 @@ export default function ImageUploadInput({
           type="button"
           onClick={() => {
             setPreview(null);
-            onImageUpload(null as any, '');
+            onImageUpload(null, '');
           }}
           className="mt-2 text-sm text-red-400 hover:text-red-300"
         >

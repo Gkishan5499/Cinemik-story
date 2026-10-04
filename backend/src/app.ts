@@ -17,8 +17,8 @@ dotenv.config();
 const app = express();
 
 app.use(cors());
-app.use(express.json({ limit: "100mb" }));
-app.use(express.urlencoded({ limit: "100mb", extended: true }));
+app.use(express.json({ limit: "250mb" }));
+app.use(express.urlencoded({ limit: "250mb", extended: true }));
 
 connectDB()
     .then(async () => {
@@ -50,15 +50,31 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
         return;
     }
     if (err instanceof multer.MulterError) {
-        console.error("[Multer Error]", err.message);
+        console.error("[Multer Error]", err.message, err.code);
         if (!res.headersSent) {
-            res.status(400).json({ error: `Upload error: ${err.message}` });
+            if (err.code === "LIMIT_FILE_SIZE") {
+                res.status(413).json({
+                    error: "Upload failed: File is too large. Maximum allowed size is 100MB per file.",
+                    code: "LIMIT_FILE_SIZE",
+                });
+            } else {
+                res.status(400).json({ error: `Upload error: ${err.message}`, code: err.code });
+            }
         }
         return;
     }
     console.error("[Unhandled Error]", err);
     if (!res.headersSent) {
-        res.status(500).json({ error: err?.message || "Internal server error" });
+        const isTooLarge =
+            err?.status === 413 ||
+            err?.statusCode === 413 ||
+            (err?.message && (err.message.includes("too large") || err.message.includes("exceeds the allowed limit")));
+        const status = isTooLarge ? 413 : (err?.status || err?.statusCode || 500);
+        res.status(status).json({
+            error: isTooLarge
+                ? (err?.message || "File too large. Maximum allowed size is 100MB per file.")
+                : (err?.message || "Internal server error"),
+        });
     }
 });
 

@@ -408,10 +408,10 @@ export const createEpisode = async (req: AuthRequest, res: Response) => {
     const uploadedVideoFiles = (reqFiles && typeof reqFiles === "object" && !Array.isArray(reqFiles)) ? (reqFiles.video || []) : [];
 
     if (Array.isArray(reqFiles)) {
-      images = reqFiles.map((file: any) => file.path);
+      images = reqFiles.map((file: any) => file.path).filter(Boolean);
     } else if (reqFiles && typeof reqFiles === "object") {
-      images = (reqFiles.images || []).map((file: any) => file.path);
-      if (uploadedVideoFiles.length > 0) {
+      images = (reqFiles.images || []).map((file: any) => file.path).filter(Boolean);
+      if (uploadedVideoFiles.length > 0 && uploadedVideoFiles[0]?.path) {
         uploadedVideoUrl = uploadedVideoFiles[0].path;
       }
     }
@@ -425,7 +425,7 @@ export const createEpisode = async (req: AuthRequest, res: Response) => {
           let fileIdx = 0;
           parsedSections = raw.map((sec: any, idx: number) => {
             let vUrl = sec.videoUrl || "";
-            if ((!vUrl || vUrl.startsWith("file_placeholder")) && uploadedVideoFiles[fileIdx]) {
+            if ((!vUrl || vUrl.startsWith("file_placeholder")) && uploadedVideoFiles[fileIdx]?.path) {
               vUrl = uploadedVideoFiles[fileIdx].path;
               fileIdx++;
             }
@@ -434,7 +434,7 @@ export const createEpisode = async (req: AuthRequest, res: Response) => {
               videoUrl: vUrl,
               sectionNumber: idx + 1,
             };
-          }).filter((sec) => sec.videoUrl);
+          }).filter((sec) => sec.videoUrl && !sec.videoUrl.startsWith("file_placeholder"));
         }
       } catch (e) {
         parsedSections = [];
@@ -443,12 +443,14 @@ export const createEpisode = async (req: AuthRequest, res: Response) => {
 
     if (parsedSections.length === 0) {
       if (uploadedVideoFiles.length > 0) {
-        parsedSections = uploadedVideoFiles.map((file: any, idx: number) => ({
-          title: `Part ${idx + 1}`,
-          videoUrl: file.path,
-          sectionNumber: idx + 1,
-        }));
-      } else if (uploadedVideoUrl) {
+        parsedSections = uploadedVideoFiles
+          .filter((file: any) => file?.path)
+          .map((file: any, idx: number) => ({
+            title: `Part ${idx + 1}`,
+            videoUrl: file.path,
+            sectionNumber: idx + 1,
+          }));
+      } else if (uploadedVideoUrl && !uploadedVideoUrl.startsWith("file_placeholder")) {
         parsedSections = [{
           title: "Part 1",
           videoUrl: uploadedVideoUrl,
@@ -523,10 +525,10 @@ export const updateEpisode = async (req: AuthRequest, res: Response) => {
     const uploadedVideoFiles = (reqFiles && typeof reqFiles === "object" && !Array.isArray(reqFiles)) ? (reqFiles.video || []) : [];
 
     if (Array.isArray(reqFiles)) {
-      images = reqFiles.map((file: any) => file.path);
+      images = reqFiles.map((file: any) => file.path).filter(Boolean);
     } else if (reqFiles && typeof reqFiles === "object") {
-      images = (reqFiles.images || []).map((file: any) => file.path);
-      if (uploadedVideoFiles.length > 0) {
+      images = (reqFiles.images || []).map((file: any) => file.path).filter(Boolean);
+      if (uploadedVideoFiles.length > 0 && uploadedVideoFiles[0]?.path) {
         uploadedVideoUrl = uploadedVideoFiles[0].path;
       }
     }
@@ -540,7 +542,7 @@ export const updateEpisode = async (req: AuthRequest, res: Response) => {
           let fileIdx = 0;
           parsedSections = raw.map((sec: any, idx: number) => {
             let vUrl = sec.videoUrl || "";
-            if ((!vUrl || vUrl.startsWith("file_placeholder")) && uploadedVideoFiles[fileIdx]) {
+            if ((!vUrl || vUrl.startsWith("file_placeholder")) && uploadedVideoFiles[fileIdx]?.path) {
               vUrl = uploadedVideoFiles[fileIdx].path;
               fileIdx++;
             }
@@ -549,7 +551,7 @@ export const updateEpisode = async (req: AuthRequest, res: Response) => {
               videoUrl: vUrl,
               sectionNumber: idx + 1,
             };
-          }).filter((sec) => sec.videoUrl);
+          }).filter((sec) => sec.videoUrl && !sec.videoUrl.startsWith("file_placeholder"));
         }
       } catch (e) {
         parsedSections = [];
@@ -558,7 +560,7 @@ export const updateEpisode = async (req: AuthRequest, res: Response) => {
       if (parsedSections.length > 0) {
         episode.videoUrl = parsedSections[0].videoUrl;
       }
-    } else if (uploadedVideoUrl !== undefined) {
+    } else if (uploadedVideoUrl !== undefined && !uploadedVideoUrl.startsWith("file_placeholder")) {
       episode.videoUrl = uploadedVideoUrl;
     }
 

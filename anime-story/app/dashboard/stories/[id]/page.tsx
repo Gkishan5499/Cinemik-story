@@ -70,6 +70,7 @@ export default function StoryEditorPage() {
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [pageLoading, setPageLoading] = useState(true);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   const [storyData, setStoryData] = useState({
     title: '',
@@ -145,6 +146,14 @@ export default function StoryEditorPage() {
     }
   }, [storyId, user?.role, loadData]);
 
+  useEffect(() => {
+    if (!successMessage) return;
+    const timer = setTimeout(() => {
+      setSuccessMessage('');
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [successMessage]);
+
   const handleMultipleVideosSelect = (
     e: React.ChangeEvent<HTMLInputElement>,
     isEdit: boolean
@@ -186,6 +195,7 @@ export default function StoryEditorPage() {
     try {
       setSavingStory(true);
       setError('');
+      setSuccessMessage('');
 
       if (storyData.contentType === 'video' && storyVideoFile) {
         if (storyVideoFile.size > 100 * 1024 * 1024) {
@@ -222,6 +232,7 @@ export default function StoryEditorPage() {
       }));
       setStoryVideoFile(null);
       setNewBackgroundMusic(null);
+      setSuccessMessage('Story details saved successfully!');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to update story');
     } finally {
@@ -234,8 +245,14 @@ export default function StoryEditorPage() {
     try {
       setTogglingPublish(true);
       setError('');
+      setSuccessMessage('');
       const res = await storiesAPI.togglePublish(storyId);
       setStory(res.story);
+      setSuccessMessage(
+        res.story.status === 'published'
+          ? 'Story published successfully! It is now live.'
+          : 'Story set to draft. It is now hidden from public view.'
+      );
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to toggle publish status');
     } finally {
@@ -250,14 +267,34 @@ export default function StoryEditorPage() {
     try {
       setCreatingEpisode(true);
       setError('');
+      setSuccessMessage('');
 
       if (newEpisode.contentType === 'video') {
+        let hasVideoContent = false;
         for (const sec of newVideoSections) {
-          if (sec.file && sec.file.size > 100 * 1024 * 1024) {
-            setError(`Part video "${sec.file.name}" is ${(sec.file.size / (1024 * 1024)).toFixed(1)}MB. Maximum allowed is 100MB per video file.`);
-            setCreatingEpisode(false);
-            return;
+          if (sec.file) {
+            hasVideoContent = true;
+            if (sec.file.size > 100 * 1024 * 1024) {
+              setError(`Part video "${sec.file.name}" is ${(sec.file.size / (1024 * 1024)).toFixed(1)}MB. Cloudinary and server maximum allowed is 100MB per video file.`);
+              setCreatingEpisode(false);
+              return;
+            }
+          } else if (sec.videoUrl.trim()) {
+            hasVideoContent = true;
           }
+        }
+        if (!hasVideoContent) {
+          setError('Please upload at least one video file or provide a video URL for this Motion Comic episode.');
+          setCreatingEpisode(false);
+          return;
+        }
+      }
+
+      for (const img of episodeImages) {
+        if (img.size > 10 * 1024 * 1024) {
+          setError(`Image "${img.name}" is ${(img.size / (1024 * 1024)).toFixed(1)}MB. Cloudinary and server maximum allowed image size is 10MB.`);
+          setCreatingEpisode(false);
+          return;
         }
       }
 
@@ -282,6 +319,9 @@ export default function StoryEditorPage() {
 
       episodeImages.forEach((file) => formData.append('images', file));
 
+      const createdTitle = newEpisode.title;
+      const createdNumber = newEpisode.episodeNumber;
+
       await episodesAPI.create(storyId, formData);
 
       setShowCreateEpisode(false);
@@ -289,6 +329,7 @@ export default function StoryEditorPage() {
       setNewVideoSections([{ title: 'Part 1', videoUrl: '', file: null }]);
       setNewEpisode({ ...initialEpisodeForm, episodeNumber: episodes.length + 2 });
       await loadData();
+      setSuccessMessage(`✓ Episode ${createdNumber} ("${createdTitle}") was uploaded and created successfully!`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create episode');
     } finally {
@@ -337,14 +378,34 @@ export default function StoryEditorPage() {
     try {
       setUpdatingEpisode(true);
       setError('');
+      setSuccessMessage('');
 
       if (editEpisodeData.contentType === 'video') {
+        let hasVideoContent = false;
         for (const sec of editVideoSections) {
-          if (sec.file && sec.file.size > 100 * 1024 * 1024) {
-            setError(`Part video "${sec.file.name}" is ${(sec.file.size / (1024 * 1024)).toFixed(1)}MB. Maximum allowed is 100MB per video file.`);
-            setUpdatingEpisode(false);
-            return;
+          if (sec.file) {
+            hasVideoContent = true;
+            if (sec.file.size > 100 * 1024 * 1024) {
+              setError(`Part video "${sec.file.name}" is ${(sec.file.size / (1024 * 1024)).toFixed(1)}MB. Cloudinary and server maximum allowed is 100MB per video file.`);
+              setUpdatingEpisode(false);
+              return;
+            }
+          } else if (sec.videoUrl.trim()) {
+            hasVideoContent = true;
           }
+        }
+        if (!hasVideoContent && !editEpisodeData.videoUrl) {
+          setError('Please upload at least one video file or provide a video URL for this Motion Comic episode.');
+          setUpdatingEpisode(false);
+          return;
+        }
+      }
+
+      for (const img of editEpisodeImages) {
+        if (img.size > 10 * 1024 * 1024) {
+          setError(`Image "${img.name}" is ${(img.size / (1024 * 1024)).toFixed(1)}MB. Cloudinary and server maximum allowed image size is 10MB.`);
+          setUpdatingEpisode(false);
+          return;
         }
       }
 
@@ -369,9 +430,13 @@ export default function StoryEditorPage() {
 
       editEpisodeImages.forEach((file) => formData.append('images', file));
 
+      const updatedTitle = editEpisodeData.title;
+      const updatedNumber = editEpisodeData.episodeNumber;
+
       await episodesAPI.update(storyId, editingEpisodeId, formData);
       cancelEditEpisode();
       await loadData();
+      setSuccessMessage(`✓ Episode ${updatedNumber} ("${updatedTitle}") updated successfully!`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to update episode');
     } finally {
@@ -385,8 +450,10 @@ export default function StoryEditorPage() {
 
     try {
       setError('');
+      setSuccessMessage('');
       await episodesAPI.delete(storyId, episodeId);
       await loadData();
+      setSuccessMessage('✓ Episode deleted successfully.');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to delete episode');
     }
@@ -430,6 +497,25 @@ export default function StoryEditorPage() {
             <button
               type='button'
               onClick={() => setError('')}
+              className='text-white/60 hover:text-white px-2 py-0.5 rounded text-xs hover:bg-white/10 font-mono'
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {successMessage && (
+          <div className='mb-6 p-4 rounded-lg bg-emerald-500/20 border border-emerald-500/50 text-emerald-200 text-sm flex items-start justify-between gap-3'>
+            <div className='flex items-start gap-2.5'>
+              <span className='text-lg leading-none mt-0.5'>✅</span>
+              <div>
+                <p className='font-semibold text-emerald-300 font-mono text-xs uppercase'>Success / Confirmed</p>
+                <p className='mt-1 text-xs text-white/90 leading-relaxed'>{successMessage}</p>
+              </div>
+            </div>
+            <button
+              type='button'
+              onClick={() => setSuccessMessage('')}
               className='text-white/60 hover:text-white px-2 py-0.5 rounded text-xs hover:bg-white/10 font-mono'
             >
               ✕
@@ -794,14 +880,14 @@ export default function StoryEditorPage() {
                       NORMAL COMIC / MANGA / WEBTOON CHAPTER PANELS
                     </p>
                     <p className='text-[11px] text-white/60 font-mono mt-0.5'>
-                      Upload image panels, pages, or vertical strips (multi-select up to 25MB each).
+                      Upload image panels, pages, or vertical strips (multi-select up to 10MB each).
                     </p>
                   </div>
                 </div>
                 <ImageUpload
                   onImagesSelected={setEpisodeImages}
                   multiple={true}
-                  maxSize={25}
+                  maxSize={10}
                   preview={true}
                   label='Select comic pages / manga panels (PNG, JPG, WEBP)'
                 />
@@ -830,6 +916,16 @@ export default function StoryEditorPage() {
               </div>
             )}
 
+            {creatingEpisode && (
+              <div className='p-3.5 rounded-lg bg-red-500/10 border border-red-500/30 text-xs font-mono text-red-200 flex items-center gap-3'>
+                <span className='inline-block w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin flex-shrink-0' />
+                <div>
+                  <p className='font-bold uppercase text-red-300'>Uploading Episode Media...</p>
+                  <p className='text-white/70 mt-0.5'>Please wait while your files are uploaded and processed. Do not close or refresh this tab.</p>
+                </div>
+              </div>
+            )}
+
             <div className='flex items-center gap-3'>
               <button
                 type='submit'
@@ -847,12 +943,13 @@ export default function StoryEditorPage() {
               </button>
               <button
                 type='button'
+                disabled={creatingEpisode}
                 onClick={() => {
                   setShowCreateEpisode(false);
                   setEpisodeImages([]);
                   setNewVideoSections([{ title: 'Part 1', videoUrl: '', file: null }]);
                 }}
-                className='rounded border border-white/30 px-4 py-2 text-white/80 hover:bg-white/10 font-mono text-xs uppercase'
+                className='rounded border border-white/30 px-4 py-2 text-white/80 hover:bg-white/10 font-mono text-xs uppercase disabled:opacity-50 disabled:cursor-not-allowed'
               >
                 Cancel
               </button>
@@ -1176,6 +1273,16 @@ export default function StoryEditorPage() {
                         <ImageUpload onImagesSelected={setEditEpisodeImages} multiple={true} preview={true} />
                       </div>
 
+                      {updatingEpisode && (
+                        <div className='p-3.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-xs font-mono text-blue-200 flex items-center gap-3'>
+                          <span className='inline-block w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin flex-shrink-0' />
+                          <div>
+                            <p className='font-bold uppercase text-blue-300'>Saving Changes & Uploading Media...</p>
+                            <p className='text-white/70 mt-0.5'>Please wait while your changes are saved. Do not close this tab.</p>
+                          </div>
+                        </div>
+                      )}
+
                       <div className='flex items-center gap-3'>
                         <button
                           type='submit'
@@ -1193,8 +1300,9 @@ export default function StoryEditorPage() {
                         </button>
                         <button
                           type='button'
+                          disabled={updatingEpisode}
                           onClick={cancelEditEpisode}
-                          className='rounded border border-white/30 px-4 py-2 text-white/80 hover:bg-white/10'
+                          className='rounded border border-white/30 px-4 py-2 text-white/80 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed'
                         >
                           Cancel
                         </button>
@@ -1207,6 +1315,31 @@ export default function StoryEditorPage() {
           </div>
         )}
       </div>
+
+      {/* Floating Toast Notification */}
+      {successMessage && (
+        <div className='fixed bottom-6 right-6 z-50 max-w-sm w-full p-4 rounded-xl bg-neutral-900/95 border border-emerald-500/60 text-emerald-200 shadow-2xl backdrop-blur-md flex items-start justify-between gap-3'>
+          <div className='flex items-start gap-3'>
+            <div className='p-1.5 rounded-full bg-emerald-500/20 text-emerald-400 mt-0.5'>
+              <svg className='w-4 h-4' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+                <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2.5} d='M5 13l4 4L19 7' />
+              </svg>
+            </div>
+            <div>
+              <p className='font-bold text-emerald-300 text-xs font-mono uppercase tracking-wide'>Confirmed</p>
+              <p className='mt-0.5 text-xs text-white/90 leading-relaxed'>{successMessage}</p>
+            </div>
+          </div>
+          <button
+            type='button'
+            onClick={() => setSuccessMessage('')}
+            className='text-white/40 hover:text-white p-1 rounded hover:bg-white/10 font-mono text-xs'
+            aria-label='Close notification'
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </main>
   );
 }

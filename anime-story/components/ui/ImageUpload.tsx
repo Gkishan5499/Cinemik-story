@@ -83,7 +83,7 @@ async function optimizeImageFile(file: File): Promise<File> {
 export default function ImageUpload({
   onImagesSelected,
   multiple = false,
-  maxSize = 25,
+  maxSize = 10,
   preview = true,
   label,
 }: ImageUploadProps) {
