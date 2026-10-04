@@ -21,6 +21,11 @@ const handleResponse = async (r: Response) => {
   if (r.ok) {
     return r.json();
   }
+  if (r.status === 413) {
+    throw new Error(
+      'Upload failed: The files are too large for the server (HTTP 413 Request Entity Too Large). Nginx reverse proxy client_max_body_size or upload limits were exceeded.'
+    );
+  }
   let errMsg = r.statusText || 'Request failed';
   try {
     const data = await r.json();

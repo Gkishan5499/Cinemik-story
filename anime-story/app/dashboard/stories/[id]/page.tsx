@@ -187,6 +187,14 @@ export default function StoryEditorPage() {
       setSavingStory(true);
       setError('');
 
+      if (storyData.contentType === 'video' && storyVideoFile) {
+        if (storyVideoFile.size > 100 * 1024 * 1024) {
+          setError(`Video "${storyVideoFile.name}" is ${(storyVideoFile.size / (1024 * 1024)).toFixed(1)}MB. Maximum allowed file size is 100MB.`);
+          setSavingStory(false);
+          return;
+        }
+      }
+
       const formData = new FormData();
       formData.append('title', storyData.title);
       formData.append('description', storyData.description);
@@ -242,6 +250,16 @@ export default function StoryEditorPage() {
     try {
       setCreatingEpisode(true);
       setError('');
+
+      if (newEpisode.contentType === 'video') {
+        for (const sec of newVideoSections) {
+          if (sec.file && sec.file.size > 100 * 1024 * 1024) {
+            setError(`Part video "${sec.file.name}" is ${(sec.file.size / (1024 * 1024)).toFixed(1)}MB. Maximum allowed is 100MB per video file.`);
+            setCreatingEpisode(false);
+            return;
+          }
+        }
+      }
 
       const formData = new FormData();
       formData.append('episodeNumber', String(newEpisode.episodeNumber));
@@ -320,6 +338,16 @@ export default function StoryEditorPage() {
       setUpdatingEpisode(true);
       setError('');
 
+      if (editEpisodeData.contentType === 'video') {
+        for (const sec of editVideoSections) {
+          if (sec.file && sec.file.size > 100 * 1024 * 1024) {
+            setError(`Part video "${sec.file.name}" is ${(sec.file.size / (1024 * 1024)).toFixed(1)}MB. Maximum allowed is 100MB per video file.`);
+            setUpdatingEpisode(false);
+            return;
+          }
+        }
+      }
+
       const formData = new FormData();
       formData.append('episodeNumber', String(editEpisodeData.episodeNumber));
       formData.append('title', editEpisodeData.title);
@@ -389,6 +417,25 @@ export default function StoryEditorPage() {
         >
           ← Back to Dashboard
         </Link>
+
+        {error && (
+          <div className='mb-6 p-4 rounded-lg bg-red-500/20 border border-red-500/50 text-red-200 text-sm flex items-start justify-between gap-3'>
+            <div className='flex items-start gap-2.5'>
+              <span className='text-lg leading-none mt-0.5'>⚠️</span>
+              <div>
+                <p className='font-semibold text-red-300 font-mono text-xs uppercase'>Notice / Error</p>
+                <p className='mt-1 text-xs text-white/90 leading-relaxed'>{error}</p>
+              </div>
+            </div>
+            <button
+              type='button'
+              onClick={() => setError('')}
+              className='text-white/60 hover:text-white px-2 py-0.5 rounded text-xs hover:bg-white/10 font-mono'
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         <section className='mb-10 rounded-lg border border-white/15 bg-white/5 p-6'>
           <div className='flex justify-between items-center mb-6'>
@@ -710,7 +757,12 @@ export default function StoryEditorPage() {
                             }
                             className='w-full rounded border border-white/20 bg-black/50 px-2 py-1 text-xs text-white file:mr-2 file:py-0.5 file:px-2 file:border-0 file:bg-red-500/20 file:text-red-300 font-mono'
                           />
-                          {sec.file && <p className='text-[10px] text-green-400 mt-1 font-mono'>Selected: {sec.file.name}</p>}
+                          {sec.file && (
+                            <p className={`text-[10px] mt-1 font-mono ${sec.file.size > 100 * 1024 * 1024 ? 'text-red-400 font-bold' : 'text-green-400'}`}>
+                              Selected: {sec.file.name} ({(sec.file.size / (1024 * 1024)).toFixed(1)} MB)
+                              {sec.file.size > 100 * 1024 * 1024 ? ' ⚠️ Exceeds 100MB limit!' : ''}
+                            </p>
+                          )}
                         </div>
 
                         <div>
@@ -778,13 +830,20 @@ export default function StoryEditorPage() {
               </div>
             )}
 
-            <div className='flex gap-3'>
+            <div className='flex items-center gap-3'>
               <button
                 type='submit'
                 disabled={creatingEpisode}
-                className='rounded border border-red-400/70 px-4 py-2 text-red-300 hover:bg-red-500/10 disabled:opacity-60 font-mono text-xs uppercase'
+                className='rounded border border-red-400/70 px-4 py-2 text-red-300 hover:bg-red-500/10 disabled:opacity-60 font-mono text-xs uppercase flex items-center gap-2'
               >
-                {creatingEpisode ? 'Creating...' : 'Create Episode'}
+                {creatingEpisode ? (
+                  <>
+                    <span className='inline-block w-3 h-3 border-2 border-red-300 border-t-transparent rounded-full animate-spin' />
+                    <span>Uploading Episode (Please wait)...</span>
+                  </>
+                ) : (
+                  'Create Episode'
+                )}
               </button>
               <button
                 type='button'
@@ -1052,7 +1111,12 @@ export default function StoryEditorPage() {
                                       }
                                       className='w-full rounded border border-white/20 bg-black/50 px-2 py-1 text-xs text-white file:mr-2 file:py-0.5 file:px-2 file:border-0 file:bg-red-500/20 file:text-red-300 font-mono'
                                     />
-                                    {sec.file && <p className='text-[10px] text-green-400 mt-1'>Selected: {sec.file.name}</p>}
+                                    {sec.file && (
+                                      <p className={`text-[10px] mt-1 font-mono ${sec.file.size > 100 * 1024 * 1024 ? 'text-red-400 font-bold' : 'text-green-400'}`}>
+                                        Selected: {sec.file.name} ({(sec.file.size / (1024 * 1024)).toFixed(1)} MB)
+                                        {sec.file.size > 100 * 1024 * 1024 ? ' ⚠️ Exceeds 100MB limit!' : ''}
+                                      </p>
+                                    )}
                                   </div>
 
                                   <div>
@@ -1112,13 +1176,20 @@ export default function StoryEditorPage() {
                         <ImageUpload onImagesSelected={setEditEpisodeImages} multiple={true} preview={true} />
                       </div>
 
-                      <div className='flex gap-3'>
+                      <div className='flex items-center gap-3'>
                         <button
                           type='submit'
                           disabled={updatingEpisode}
-                          className='rounded border border-blue-400/70 px-4 py-2 text-blue-200 hover:bg-blue-500/10 disabled:opacity-60'
+                          className='rounded border border-blue-400/70 px-4 py-2 text-blue-200 hover:bg-blue-500/10 disabled:opacity-60 flex items-center gap-2 font-mono text-xs uppercase'
                         >
-                          {updatingEpisode ? 'Saving...' : 'Save Changes'}
+                          {updatingEpisode ? (
+                            <>
+                              <span className='inline-block w-3 h-3 border-2 border-blue-300 border-t-transparent rounded-full animate-spin' />
+                              <span>Saving Changes (Please wait)...</span>
+                            </>
+                          ) : (
+                            'Save Changes'
+                          )}
                         </button>
                         <button
                           type='button'
